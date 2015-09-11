@@ -1,0 +1,9 @@
+extends ../index
+
+block content
+  h2= "Item #" + item.id
+  .item-content
+    b Label: 
+    span= item.label
+  a(class="btn btn-primary", href="/items/" + item.id + "/edit", data-processing-feedback="Loading...") Edit
+  a(class="btn btn-default", href="/items") Go back

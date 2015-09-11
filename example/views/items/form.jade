@@ -1,0 +1,9 @@
+mixin item_form(method, action, item)
+  - item = item || {label: ""}
+  form#item-form(method=method, action=action)
+    .form-group
+      label(for="label") Label
+      input(id="label", name="label", type="text", class="form-control", value="#{item.label}", data-processing-disable="1")
+
+    .form-group
+      input(id="submit", name="submit", type="submit", value="Submit", class="btn btn-primary", data-processing-feedback="Processing...")
