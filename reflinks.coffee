@@ -1,3 +1,7 @@
+unless window.history and window.history.pushState
+  console.warn("Reflinks not available in this browser")
+  return
+
 # Global reference to the Reflinks object
 Reflinks = @Reflinks = {}
 
@@ -22,9 +26,22 @@ toElements = (htmlString) ->
 updateTitle = (title) ->
   document.title = title
 
+# Elements that will be kept in the page when updating the content.
+keepElements = []
+
+# Number of pages to keep in the cache
+cacheReferences = {}
+
+# A reference to the cache of the current page.
+currentCacheRef = null
+
+# Functions that will execute after a request is completed. This is useful
+# for restoring the state of elements that have data-processing attributes.
+rollbackAfterLoad = []
+
 # Caches the current page associated with the specified name.
 cache = Reflinks.cache = (name = document.location.href, once = false) ->
-  cacheReferences[name] =
+  currentCacheRef = cacheReferences[name] =
     location: document.location.href
     documentRoot: documentRoot
     once: once
@@ -51,16 +68,6 @@ isLocationCached = (location) ->
 
 # Returns true if the current page should be cached and false if not.
 isCurrentPageCached = -> isLocationCached(document.location.href)
-
-# Elements that will be kept in the page when updating the content.
-keepElements = []
-
-# Number of pages to keep in the cache
-cacheReferences = {}
-
-# Functions that will execute after a request is completed. This is useful
-# for restoring the state of elements that have data-processing attributes.
-rollbackAfterLoad = []
 
 # Calls all rollback functions to restore the state of processing elements.
 rollbackProcessingElements = ->
@@ -89,7 +96,7 @@ findDocumentRoot = (elements) ->
       return element
     docRoot = element.querySelector('*[data-reflinks-root]')
     return docRoot if docRoot
-  return elements[0]
+  null
 
 # Because reflinks sends requests without reloading the page, traditional
 # browser reload is not displayed. To fill this void, an HTML progress bar
@@ -151,6 +158,7 @@ window.addEventListener('popstate', ->
 # method throug the data-method attribute.
 document.addEventListener('click', (ev) ->
   if ev.target and ev.target.tagName is 'A'
+    currentCacheRef?.scroll = currentPageScroll()
     handleAnchorNavigation(ev.target, ev)
 )
 
@@ -164,6 +172,7 @@ document.addEventListener('submit', (ev) ->
     serialized[element.name] = element.value
   method = form.attributes['method'].value or 'POST'
   url = form.attributes['action'].value
+  currentCacheRef?.scroll = currentPageScroll()
   asyncRequest(method, url, serialized)
 )
 
@@ -266,6 +275,7 @@ insertRootContents = (nodes) ->
 restoreFromCache = (method, location, skipPushHistory) ->
   cache = getLocationCache location
   return asyncRequest(method, location) unless cache
+  restorePageScroll(cache.scroll) if cache.scroll
   restoreCache(cache)
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
   refreshCurrentPage(method, location, cache) unless cache.once
@@ -340,11 +350,19 @@ onRequestFailure = (content, href) ->
 # Returns the title of the specified HTML. The HTML should be a string and not
 # a DOM element.
 getTitle = (html) ->
-  matches = /<title>(.*?)<\/title>/.exec(html);
+  matches = /<title>(.*?)<\/title>/.exec(html)
   if matches and matches[1] then matches[1] else ""
 
 # Returns the body of the specified HTML. The HTML should be a string and not
 # a DOM element.
 getBody = (html) ->
-  matches = /<body>([^]*?)<\/body>/.exec(html);
+  matches = /<body>([^]*?)<\/body>/.exec(html)
   if matches and matches[1] then matches[1] else ""
+
+# This function returns the scroll offset of the current page
+currentPageScroll = ->
+  {positionX: window.pageXOffset, positionY: window.pageYOffset}
+
+# Scrolls the current page to the specified offset
+restorePageScroll = (offset) ->
+  window.scrollTo offset.positionX, offset.positionY

@@ -14,6 +14,7 @@ app.set('views', __dirname + '/views');
 
 // The only static file we're serving is the reflinks file.
 app.use(express.static(__dirname + '/../build'));
+app.use(express.static(__dirname + '/assets'));
 
 // Parsing the body of the request in POST requests
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -66,6 +67,14 @@ app.post('/items/:id', function(req, res) {
   item.label = req.body.label;
   item.done = req.body.done;
   res.redirect('/items/' + item.id);
+});
+
+app.get('/google', function(req, res) {
+  res.redirect('https://google.com');
+});
+
+app.get('/exception', function(req, res) {
+  res.status(500).send('Something broke!');
 });
 
 app.listen(3000, function() {
