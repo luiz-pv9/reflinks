@@ -74,8 +74,14 @@ rollbackProcessingElements = ->
   while rollbackAfterLoad.length > 0
     rollbackAfterLoad.pop().call()
 
-document.addEventListener('after:reflinks:load', rollbackProcessingElements)
-document.addEventListener('after:reflinks:refresh', rollbackProcessingElements)
+# Called after the page is rendered to autofocus any field
+maybeAutofocusElement = ->
+  autofocusElement = (list = document.querySelectorAll 'input[autofocus], textarea[autofocus]')[list.length - 1]
+  if autofocusElement and document.activeElement isnt autofocusElement
+    autofocusElement.focus()
+
+document.addEventListener('after:reflinks:render', rollbackProcessingElements)
+document.addEventListener('after:reflinks:render', maybeAutofocusElement)
 
 # The app must have a document root. It defaults to the whole body, but the
 # user can change it with the data-reflinks-root attribute. Everything
@@ -318,6 +324,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   rootNodes = customRootNode.childNodes if customRootNode
   document.dispatchEvent(new Event('after:reflinks:request', rootNodes))
   document.dispatchEvent(new Event('before:reflinks:load', rootNodes))
+  document.dispatchEvent(new Event('before:reflinks:render', rootNodes))
   if isCurrentPageCached()
     if isLocationCached(url)
       updateCacheAndTransitionTo(url, rootNodes)
@@ -329,6 +336,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
     appendRootContents(rootNodes)
   window.history.pushState({reflinks: true}, "", url) unless skipPushHistory
   document.dispatchEvent(new Event('after:reflinks:load', rootNodes))
+  document.dispatchEvent(new Event('after:reflinks:render', rootNodes))
 
 # Callback called when an AJAX request to update the current page succeeds.
 onRefreshSuccess = (content) ->
@@ -338,9 +346,11 @@ onRefreshSuccess = (content) ->
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
   document.dispatchEvent(new Event('before:reflinks:refresh', rootNodes))
+  document.dispatchEvent(new Event('before:reflinks:render', rootNodes))
   removeRootContents()
   appendRootContents(rootNodes)
   document.dispatchEvent(new Event('after:reflinks:refresh', rootNodes))
+  document.dispatchEvent(new Event('after:reflinks:render', rootNodes))
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
