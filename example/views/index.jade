@@ -5,6 +5,16 @@ html
     script(type="text/javascript", src="/example.js")
     title Reflinks
   body
-    h1 Reflinks example application!!
     .container
-      block content
+      h1 Reflinks example application!!
+    .container
+      .row
+        .col-md-8
+          .root-content(data-reflinks-root="1")
+            block content
+        .col-md-4
+          a.twitter-timeline(href='https://twitter.com/luizpv9', data-widget-id='643956503460843520') Tweets by @luizpv9
+          script(type="text/javascript")
+              !function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");
+
+

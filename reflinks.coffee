@@ -80,8 +80,8 @@ maybeAutofocusElement = ->
   if autofocusElement and document.activeElement isnt autofocusElement
     autofocusElement.focus()
 
-document.addEventListener('after:reflinks:render', rollbackProcessingElements)
-document.addEventListener('after:reflinks:render', maybeAutofocusElement)
+document.addEventListener('reflinks:load', rollbackProcessingElements)
+document.addEventListener('reflinks:load', maybeAutofocusElement)
 
 # The app must have a document root. It defaults to the whole body, but the
 # user can change it with the data-reflinks-root attribute. Everything
@@ -215,7 +215,7 @@ handleAnchorNavigation = (elm, ev) ->
   return if elm.getAttribute 'data-noreflink'
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
-  document.dispatchEvent new Event('before:reflinks:request', elm, method, href) 
+  document.dispatchEvent new Event('reflinks:before-request', elm, method, href) 
   ev.preventDefault()
   maybeUpdateProcessingFeedback(elm)
   if isLocationCached(href)
@@ -281,8 +281,9 @@ insertRootContents = (nodes) ->
 restoreFromCache = (method, location, skipPushHistory) ->
   cache = getLocationCache location
   return asyncRequest(method, location) unless cache
-  restorePageScroll(cache.scroll) if cache.scroll
+  document.dispatchEvent(new Event('reflinks:before-unload', method, location))
   restoreCache(cache)
+  restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
   refreshCurrentPage(method, location, cache) unless cache.once
 
@@ -322,9 +323,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
-  document.dispatchEvent(new Event('after:reflinks:request', rootNodes))
-  document.dispatchEvent(new Event('before:reflinks:load', rootNodes))
-  document.dispatchEvent(new Event('before:reflinks:render', rootNodes))
+  document.dispatchEvent(new Event('reflinks:before-load', rootNodes))
   if isCurrentPageCached()
     if isLocationCached(url)
       updateCacheAndTransitionTo(url, rootNodes)
@@ -335,8 +334,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
     removeRootContents()
     appendRootContents(rootNodes)
   window.history.pushState({reflinks: true}, "", url) unless skipPushHistory
-  document.dispatchEvent(new Event('after:reflinks:load', rootNodes))
-  document.dispatchEvent(new Event('after:reflinks:render', rootNodes))
+  document.dispatchEvent(new Event('reflinks:load', rootNodes))
 
 # Callback called when an AJAX request to update the current page succeeds.
 onRefreshSuccess = (content) ->
@@ -345,12 +343,10 @@ onRefreshSuccess = (content) ->
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
-  document.dispatchEvent(new Event('before:reflinks:refresh', rootNodes))
-  document.dispatchEvent(new Event('before:reflinks:render', rootNodes))
+  document.dispatchEvent(new Event('reflinks:before-reload', rootNodes))
   removeRootContents()
   appendRootContents(rootNodes)
-  document.dispatchEvent(new Event('after:reflinks:refresh', rootNodes))
-  document.dispatchEvent(new Event('after:reflinks:render', rootNodes))
+  document.dispatchEvent(new Event('reflinks:load', rootNodes))
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
