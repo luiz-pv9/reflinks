@@ -26,6 +26,15 @@ toElements = (htmlString) ->
 updateTitle = (title) ->
   document.title = title
 
+# Showing the progress bar for fast requests makes the application seem
+# slower. The 'progressBarDelay' variable specifies the amount of time
+# in milliseconds that a request must take before the progress bar is
+# displayed.
+Reflinks.progressBarDelay = 400
+
+# 4 seconds to identify a request as timed out.
+Reflinks.xhrTimeout = 4000
+
 # Elements that will be kept in the page when updating the content.
 keepElements = []
 
@@ -115,15 +124,17 @@ ProgressBar =
   # Sets the bar loading percentage to 0% and starts the animation. The
   # animation won't stop untill 'done' is called.
   start: ->
-    ProgressBar.elm.style.display = 'block'
-    ProgressBar.elm.style.width = '1%'
-    progress = 0
-    ProgressBar.interval = setInterval(() ->
-      distance = 100 - progress
-      if progress <= 100
-        progress += Math.min((Math.floor(Math.random() * 7) + 1), distance)
-      ProgressBar.elm.style.width = progress + '%'
-    , 100)
+    ProgressBar.delayTimeoutId = setTimeout(->
+      ProgressBar.elm.style.display = 'block'
+      ProgressBar.elm.style.width = '1%'
+      progress = 0
+      ProgressBar.interval = setInterval(() ->
+        distance = 100 - progress
+        if progress <= 100
+          progress += Math.min((Math.floor(Math.random() * 7) + 1), distance)
+        ProgressBar.elm.style.width = progress + '%'
+      , 100)
+    , Reflinks.progressBarDelay)
 
   # Moves the bar indicator to the specified percentage. The value must be
   # between 0 and 1.
@@ -132,6 +143,9 @@ ProgressBar =
 
   # Finishes the animation and hides the progress bar.
   done: ->
+    if ProgressBar.delayTimeoutId
+      clearTimeout(ProgressBar.delayTimeoutId)
+      ProgressBar.delayTimeoutId = null
     if ProgressBar.interval
       clearInterval(ProgressBar.interval)
       ProgressBar.interval = null
@@ -219,7 +233,12 @@ handleAnchorNavigation = (elm, ev) ->
   ev.preventDefault()
   maybeUpdateProcessingFeedback(elm)
   if isLocationCached(href)
-    restoreFromCache(method, href)
+    # restoreFromCache returns the cache reference or null if nothing was found
+    cache = restoreFromCache(method, href)
+    # After restoring the cache to improve the user experience a new
+    # request is issued to grab the updated version of the page
+    if cache
+      refreshCurrentPage(method, href, cache) unless cache.once
   else
     asyncRequest(method, href)
 
@@ -234,10 +253,15 @@ serializeToQueryString = (obj) ->
 # Performs an AJAX request to the specified url. The request is then handleded
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure) ->
-  xhr = new XMLHttpRequest()
+  Reflinks.xhr = xhr = new XMLHttpRequest()
   xhr.open(method, url, true)
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
+  xhr.timeout = Reflinks.xhrTimeout
+  xhr.ontimeout = ->
+    document.dispatchEvent(new Event('reflinks:timeout', method, url, data))
+  xhr.onerror = ->
+    onRequestFailure()
   xhr.onreadystatechange = () ->
     if xhr.readyState is 4
       if xhr.status is 200
@@ -285,7 +309,7 @@ restoreFromCache = (method, location, skipPushHistory) ->
   restoreCache(cache)
   restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
-  refreshCurrentPage(method, location, cache) unless cache.once
+  cache
 
 # Hides the current documentRoot and shows the element stored in the specified
 # cache.

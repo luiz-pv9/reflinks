@@ -77,6 +77,12 @@ app.get('/exception', function(req, res) {
   res.status(500).send('Something broke!');
 });
 
+app.get('/timeout', function(req, res) {
+	setTimeout(function() {
+		res.end("Hello timeout");
+	}, 6000);
+});
+
 app.listen(3000, function() {
   console.log("Server running on localhost:3000");
 });
