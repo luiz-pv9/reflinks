@@ -49,7 +49,7 @@ cache = Reflinks.cache = (name = document.location.href, once = false) ->
 # Caches the current page with the 'once' flag to true. The once flag
 # indicates to Reflinks if a new request must be made to the server to retreive
 # the last updated view.
-cacheOnce = Reflinks.cacheOnce = (name) -> 
+cacheOnce = Reflinks.cacheOnce = (name) ->
   Reflinks.cache(name, true)
 
 # Returns the cache object for the specified location and null if nothing
@@ -59,7 +59,7 @@ cacheOnce = Reflinks.cacheOnce = (name) ->
 getLocationCache = (location) ->
   for cache of cacheReferences
     if cacheReferences[cache].location is location or strEndsWith(cacheReferences[cache].location, location)
-      return cacheReferences[cache] 
+      return cacheReferences[cache]
   null
 
 # Returns true if the specified page should is cached and false if not.
@@ -136,14 +136,14 @@ ProgressBar =
       clearInterval(ProgressBar.interval)
       ProgressBar.interval = null
     ProgressBar.elm.style.width = '100%'
-    setTimeout(-> 
+    setTimeout(->
       ProgressBar.elm.style.display = 'none'
     , 10)
 
 # Appends the progressbar to the page body.
 window.addEventListener('load', ->
   findDocumentRootInPage()
-  documentRoot.appendChild ProgressBar.elm
+  document.body.appendChild ProgressBar.elm
   # The progress bar should never be removed from the body
   keepElements.push ProgressBar.elm
 )
@@ -215,7 +215,7 @@ handleAnchorNavigation = (elm, ev) ->
   return if elm.getAttribute 'data-noreflink'
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
-  document.dispatchEvent new Event('reflinks:before-request', elm, method, href) 
+  document.dispatchEvent new Event('reflinks:before-request', elm, method, href)
   ev.preventDefault()
   maybeUpdateProcessingFeedback(elm)
   if isLocationCached(href)
