@@ -22,6 +22,13 @@ toElements = (htmlString) ->
   div.innerHTML = htmlString
   div.childNodes
 
+# Emits the specified event to the document variable
+triggerEvent = (eventName, data) ->
+  event = document.createEvent 'Events'
+  event.data = data if data
+  event.initEvent eventName, true, true
+  document.dispatchEvent event
+
 # Updates the title of the page that appears in the browser's tab.
 updateTitle = (title) ->
   document.title = title
@@ -43,6 +50,15 @@ cacheReferences = {}
 
 # A reference to the cache of the current page.
 currentCacheRef = null
+
+EVENTS =
+  LOAD: 'reflinks:load'
+  BEFORE_REQUEST: 'reflinks:before-request'
+  TIMEOUT: 'reflinks:timeout'
+  BEFORE_UNLOAD: 'reflinks:before-unload'
+  BEFORE_LOAD: 'reflinks:before-load'
+  LOAD: 'reflinks:load'
+  BEFORE_RELOAD: 'reflinks:before-reload'
 
 # Functions that will execute after a request is completed. This is useful
 # for restoring the state of elements that have data-processing attributes.
@@ -89,8 +105,8 @@ maybeAutofocusElement = ->
   if autofocusElement and document.activeElement isnt autofocusElement
     autofocusElement.focus()
 
-document.addEventListener('reflinks:load', rollbackProcessingElements)
-document.addEventListener('reflinks:load', maybeAutofocusElement)
+document.addEventListener(EVENTS.LOAD, rollbackProcessingElements)
+document.addEventListener(EVENTS.LOAD, maybeAutofocusElement)
 
 # The app must have a document root. It defaults to the whole body, but the
 # user can change it with the data-reflinks-root attribute. Everything
@@ -229,7 +245,7 @@ handleAnchorNavigation = (elm, ev) ->
   return if elm.getAttribute 'data-noreflink'
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
-  document.dispatchEvent new Event('reflinks:before-request', elm, method, href)
+  triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   ev.preventDefault()
   maybeUpdateProcessingFeedback(elm)
   if isLocationCached(href)
@@ -253,20 +269,21 @@ serializeToQueryString = (obj) ->
 # Performs an AJAX request to the specified url. The request is then handleded
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure) ->
+  Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
   xhr.open(method, url, true)
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
   xhr.timeout = Reflinks.xhrTimeout
   xhr.ontimeout = ->
-    document.dispatchEvent(new Event('reflinks:timeout', method, url, data))
+    triggerEvent EVENTS.TIMEOUT, {method, url, data}
   xhr.onerror = ->
     onRequestFailure()
   xhr.onreadystatechange = () ->
     if xhr.readyState is 4
       if xhr.status is 200
         ors(xhr.responseText, url, skipPushHistory)
-      else
+      else if xhr.status isnt 0
         orf(xhr.responseText, url)
   # I can't think of a reason why not to include cookies.
   xhr.withCredentials = true
@@ -305,7 +322,7 @@ insertRootContents = (nodes) ->
 restoreFromCache = (method, location, skipPushHistory) ->
   cache = getLocationCache location
   return asyncRequest(method, location) unless cache
-  document.dispatchEvent(new Event('reflinks:before-unload', method, location))
+  triggerEvent EVENTS.BEFORE_UNLOAD, {method, location}
   restoreCache(cache)
   restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
@@ -342,12 +359,13 @@ updateCacheAndTransitionTo = (url, rootNodes) ->
 
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
+  Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
-  document.dispatchEvent(new Event('reflinks:before-load', rootNodes))
+  triggerEvent EVENTS.BEFORE_LOAD, {nodes: rootNodes}
   if isCurrentPageCached()
     if isLocationCached(url)
       updateCacheAndTransitionTo(url, rootNodes)
@@ -358,22 +376,24 @@ onRequestSuccess = (content, url, skipPushHistory) ->
     removeRootContents()
     appendRootContents(rootNodes)
   window.history.pushState({reflinks: true}, "", url) unless skipPushHistory
-  document.dispatchEvent(new Event('reflinks:load', rootNodes))
+  triggerEvent EVENTS.LOAD, {nodes: rootNodes}
 
 # Callback called when an AJAX request to update the current page succeeds.
 onRefreshSuccess = (content) ->
+  Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
-  document.dispatchEvent(new Event('reflinks:before-reload', rootNodes))
+  triggerEvent EVENTS.BEFORE_RELOAD, {nodes: rootNodes}
   removeRootContents()
   appendRootContents(rootNodes)
-  document.dispatchEvent(new Event('reflinks:load', rootNodes))
+  triggerEvent EVENTS.LOAD, {nodes: rootNodes}
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
+  Reflinks.xhr = null
   # Just normaly visit the page
   document.location.href = href
 
