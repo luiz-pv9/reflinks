@@ -15,6 +15,23 @@ strEndsWith = (str, suffix) ->
 shouldKeepOnPage = (elm) ->
   keepElements.indexOf(elm) isnt -1
 
+# Returns the specified url without the protocol prefix (http, https and file
+# are checked for)
+urlWithoutProtocol = (url) ->
+  url.replace('http://', '').replace('https://', '').replace('file://', '')
+
+# Returns the specified url without the hash part
+urlWithoutHash = (url) ->
+  console.error("TODO")
+
+# Returns true if the specified URL is a hash navigation (focusing an element
+# with an ID)
+isHashNavigation = (url) ->
+  currentUrl = urlWithoutProtocol(document.location.href)
+  url = urlWithoutProtocol(url)
+  console.log(currentUrl, url)
+  url.indexOf('#') is 0
+
 # Converts the specified html string to DOM elements. An array is always
 # returned even if the specified string describes a single element.
 toElements = (htmlString) ->
@@ -245,6 +262,9 @@ handleAnchorNavigation = (elm, ev) ->
   return if elm.getAttribute 'data-noreflink'
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
+  if isHashNavigation(href)
+    console.log "is hash navigation"
+    return true
   triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   ev.preventDefault()
   maybeUpdateProcessingFeedback(elm)
