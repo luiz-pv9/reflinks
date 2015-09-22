@@ -22,15 +22,23 @@ urlWithoutProtocol = (url) ->
 
 # Returns the specified url without the hash part
 urlWithoutHash = (url) ->
-  console.error("TODO")
+  indexOfHash = url.indexOf '#'
+  if indexOfHash is -1 then url else url.substring(0, indexOfHash)
+
+# Returns true if the specified url has a hash part
+urlHasHash = (url) -> url.indexOf '#' isnt -1
+
+# Returns the specified url without protocol (http, https or file) and
+# hash part.
+urlWithoutProtocolAndHash = (url) ->
+  urlWithoutProtocol(urlWithoutHash(url))
 
 # Returns true if the specified URL is a hash navigation (focusing an element
 # with an ID)
 isHashNavigation = (url) ->
-  currentUrl = urlWithoutProtocol(document.location.href)
-  url = urlWithoutProtocol(url)
-  console.log(currentUrl, url)
-  url.indexOf('#') is 0
+  currentUrl = urlWithoutProtocolAndHash(document.location.href)
+  url = urlWithoutProtocolAndHash(url)
+  return urlHasHash(url) and currentUrl == url
 
 # Converts the specified html string to DOM elements. An array is always
 # returned even if the specified string describes a single element.
@@ -197,7 +205,10 @@ window.addEventListener('load', ->
 
 # popstate event is called when the user presses the 'back' and 'forward'
 # buttons in the browser.
-window.addEventListener('popstate', ->
+window.addEventListener('popstate', (ev) ->
+  # Hash change check
+  # THIS IS NOT WORKING
+  return if ev.srcElement.location.pathname == ev.target.location.pathname
   currentState = window.history.state
   currentUrl = document.location.href
   method = currentState?.method or 'GET'
@@ -263,7 +274,6 @@ handleAnchorNavigation = (elm, ev) ->
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
   if isHashNavigation(href)
-    console.log "is hash navigation"
     return true
   triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   ev.preventDefault()
@@ -341,7 +351,8 @@ insertRootContents = (nodes) ->
 # 'once' a new request isn't made to the server.
 restoreFromCache = (method, location, skipPushHistory) ->
   cache = getLocationCache location
-  return asyncRequest(method, location) unless cache
+  unless cache
+    return asyncRequest(method, location)
   triggerEvent EVENTS.BEFORE_UNLOAD, {method, location}
   restoreCache(cache)
   restorePageScroll(cache.scroll) if cache.scroll
