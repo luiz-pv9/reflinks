@@ -70,7 +70,10 @@ app.post('/items/:id', function(req, res) {
 });
 
 app.get('/google', function(req, res) {
-  res.redirect('https://google.com');
+  res.status(280);
+  res.header('Location', 'https://google.com');
+  res.header('Method', 'GET');
+  res.end();
 });
 
 app.get('/exception', function(req, res) {

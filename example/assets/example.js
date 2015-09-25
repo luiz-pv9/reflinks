@@ -9,5 +9,7 @@ function onLoad() {
 };
 
 function onTimeout(ev) {
-	document.location.href = ev.data.url;
+  console.log("timed out... but just keep on");
+  // Just keep going
+	// document.location.href = ev.data.url;
 };

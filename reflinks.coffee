@@ -20,13 +20,13 @@ shouldKeepOnPage = (elm) ->
 urlWithoutProtocol = (url) ->
   url.replace('http://', '').replace('https://', '').replace('file://', '')
 
+# Returns true if the specified url has a hash part
+urlHasHash = (url) -> url.indexOf('#') isnt -1
+
 # Returns the specified url without the hash part
 urlWithoutHash = (url) ->
   indexOfHash = url.indexOf '#'
   if indexOfHash is -1 then url else url.substring(0, indexOfHash)
-
-# Returns true if the specified url has a hash part
-urlHasHash = (url) -> url.indexOf '#' isnt -1
 
 # Returns the specified url without protocol (http, https or file) and
 # hash part.
@@ -37,8 +37,8 @@ urlWithoutProtocolAndHash = (url) ->
 # with an ID)
 isHashNavigation = (url) ->
   currentUrl = urlWithoutProtocolAndHash(document.location.href)
-  url = urlWithoutProtocolAndHash(url)
-  return urlHasHash(url) and currentUrl == url
+  cleanUrl = urlWithoutProtocolAndHash(url)
+  return urlHasHash(url) and currentUrl == cleanUrl
 
 # Converts the specified html string to DOM elements. An array is always
 # returned even if the specified string describes a single element.
@@ -67,6 +67,10 @@ Reflinks.progressBarDelay = 400
 # 4 seconds to identify a request as timed out.
 Reflinks.xhrTimeout = 4000
 
+# XHR redirects are tricky. This variable specifies a custom status code
+# that Reflinks will understand as a redirect.
+Reflinks.redirectStatusCode = 280
+
 # Elements that will be kept in the page when updating the content.
 keepElements = []
 
@@ -76,13 +80,16 @@ cacheReferences = {}
 # A reference to the cache of the current page.
 currentCacheRef = null
 
+# A refenrece to the current location url (Url class instance)
+currentLocationUrl = null
+
+# Constants for all events emitted
 EVENTS =
   LOAD: 'reflinks:load'
   BEFORE_REQUEST: 'reflinks:before-request'
   TIMEOUT: 'reflinks:timeout'
   BEFORE_UNLOAD: 'reflinks:before-unload'
   BEFORE_LOAD: 'reflinks:before-load'
-  LOAD: 'reflinks:load'
   BEFORE_RELOAD: 'reflinks:before-reload'
 
 # Functions that will execute after a request is completed. This is useful
@@ -90,8 +97,9 @@ EVENTS =
 rollbackAfterLoad = []
 
 # Caches the current page associated with the specified name.
-cache = Reflinks.cache = (name = document.location.href, once = false) ->
-  currentCacheRef = cacheReferences[name] =
+cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
+  key = if typeof name is 'string' then name else name.fullWithoutHash()
+  currentCacheRef = cacheReferences[key] =
     location: document.location.href
     documentRoot: documentRoot
     once: once
@@ -117,7 +125,7 @@ isLocationCached = (location) ->
   getLocationCache(location) isnt null
 
 # Returns true if the current page should be cached and false if not.
-isCurrentPageCached = -> isLocationCached(document.location.href)
+isCurrentPageCached = -> isLocationCached(currentLocationUrl.fullWithoutHash())
 
 # Calls all rollback functions to restore the state of processing elements.
 rollbackProcessingElements = ->
@@ -130,8 +138,14 @@ maybeAutofocusElement = ->
   if autofocusElement and document.activeElement isnt autofocusElement
     autofocusElement.focus()
 
+# Stores the current location to the currentLocationUrl variable
+storeCurrentLocationUrl = ->
+  currentLocationUrl = new Url(document.location)
+
+# Default events of Reflinks
 document.addEventListener(EVENTS.LOAD, rollbackProcessingElements)
 document.addEventListener(EVENTS.LOAD, maybeAutofocusElement)
+document.addEventListener(EVENTS.LOAD, storeCurrentLocationUrl)
 
 # The app must have a document root. It defaults to the whole body, but the
 # user can change it with the data-reflinks-root attribute. Everything
@@ -197,6 +211,7 @@ ProgressBar =
 
 # Appends the progressbar to the page body.
 window.addEventListener('load', ->
+  storeCurrentLocationUrl()
   findDocumentRootInPage()
   document.body.appendChild ProgressBar.elm
   # The progress bar should never be removed from the body
@@ -206,9 +221,8 @@ window.addEventListener('load', ->
 # popstate event is called when the user presses the 'back' and 'forward'
 # buttons in the browser.
 window.addEventListener('popstate', (ev) ->
-  # Hash change check
-  # THIS IS NOT WORKING
-  return if ev.srcElement.location.pathname == ev.target.location.pathname
+  targetLocation = new Url(ev.target.location)
+  return 'just a hash change...' if currentLocationUrl.isSame(targetLocation)
   currentState = window.history.state
   currentUrl = document.location.href
   method = currentState?.method or 'GET'
@@ -273,10 +287,9 @@ handleAnchorNavigation = (elm, ev) ->
   return if elm.getAttribute 'data-noreflink'
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
-  if isHashNavigation(href)
-    return true
-  triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
+  return 'nothing to do here' if isHashNavigation(href)
   ev.preventDefault()
+  triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   maybeUpdateProcessingFeedback(elm)
   if isLocationCached(href)
     # restoreFromCache returns the cache reference or null if nothing was found
@@ -304,16 +317,18 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   xhr.open(method, url, true)
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
-  xhr.timeout = Reflinks.xhrTimeout
-  xhr.ontimeout = ->
-    triggerEvent EVENTS.TIMEOUT, {method, url, data}
-  xhr.onerror = ->
-    onRequestFailure()
+  xhrTimeout = setTimeout(->
+    triggerEvent EVENTS.TIMEOUT, {xhr, method, url, data}
+  , Reflinks.xhrTimeout)
+  xhr.onerror = -> onRequestFailure()
   xhr.onreadystatechange = () ->
     if xhr.readyState is 4
+      clearTimeout(xhrTimeout)
       if xhr.status is 200
         ors(xhr.responseText, url, skipPushHistory)
-      else if xhr.status isnt 0
+      else if xhr.status is Reflinks.redirectStatusCode
+        onRedirectSuccess(xhr)
+      else
         orf(xhr.responseText, url)
   # I can't think of a reason why not to include cookies.
   xhr.withCredentials = true
@@ -330,7 +345,7 @@ removeRootContents = () ->
   documentRoot.removeChild node for node in nodesToRemove
 
 # Hides the current documentRoot and creates a new one
-cacheRootContents = ->
+cacheRootContents = (cache) ->
   documentRoot.style.display = 'none'
 
 # Appends the specified nodes to the root content of the page.
@@ -355,6 +370,7 @@ restoreFromCache = (method, location, skipPushHistory) ->
     return asyncRequest(method, location)
   triggerEvent EVENTS.BEFORE_UNLOAD, {method, location}
   restoreCache(cache)
+  storeCurrentLocationUrl()
   restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
   cache
@@ -388,6 +404,18 @@ updateCacheAndTransitionTo = (url, rootNodes) ->
     cacheRootContents()
     insertRootContents(rootNodes)
 
+# This callback is called when the server sends a redirect to Reflinks.redirectStatusCode
+onRedirectSuccess = (xhr) ->
+  desiredLocation = xhr.getResponseHeader('Location')
+  return console.error("'Location' header not found") unless desiredLocation
+  desiredMethod = xhr.getResponseHeader('Method') or 'GET'
+  currentUrl = new Url(document.location)
+  desiredUrl = new Url(desiredLocation)
+  if currentUrl.isSameDomain(desiredUrl)
+    document.location.href = desiredUrl.full()
+  else
+    document.location.href = desiredUrl.full()
+
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
   Reflinks.xhr = null
@@ -406,10 +434,12 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   else
     removeRootContents()
     appendRootContents(rootNodes)
-  window.history.pushState({reflinks: true}, "", url) unless skipPushHistory
+  window.history.pushState({reflinks: true, href: document.location.href}, "", url) unless skipPushHistory
+  storeCurrentLocationUrl()
   triggerEvent EVENTS.LOAD, {nodes: rootNodes}
 
-# Callback called when an AJAX request to update the current page succeeds.
+# Callback called when an AJAX request to update the current page succeeds. The
+# currentLocationUrl is already updated when this function runs.
 onRefreshSuccess = (content) ->
   Reflinks.xhr = null
   ProgressBar.done()
@@ -447,3 +477,60 @@ currentPageScroll = ->
 # Scrolls the current page to the specified offset
 restorePageScroll = (offset) ->
   window.scrollTo offset.positionX, offset.positionY
+
+# The Url class represents a single URL and provides helper methods to decide
+# things such as: does the url have hash? does it has query params? is it
+# in the same domain as the current application?
+class Url
+  constructor: (arg) ->
+    if typeof arg is 'string'
+      @storeAndSplit(arg)
+    else if arg.href and arg.pathname # location object
+      @storeLocation(arg)
+
+  # Splits the specified url to help answer questions about the URL
+  storeAndSplit: (url) ->
+    @protocol = 'http' if url.indexOf('http://') isnt -1
+    @protocol = 'https' if url.indexOf('https://') isnt -1
+    url = url.replace(@protocol + '://', '')
+    indexOfHash = url.indexOf('#')
+    @hash = ''
+    if indexOfHash isnt -1
+      @hash = url.substring(indexOfHash, url.length)
+    indexOfSlash = if url.indexOf('/') is -1 then url.length else url.indexOf('/')
+    endQuery = if indexOfHash is -1 then url.length else indexOfHash
+    indexOfQuestionMark = if url.indexOf('?', indexOfSlash) is -1 then url.length else url.indexOf('?', indexOfSlash)
+    @domain = url.substring(0, indexOfSlash)
+    @path = url.substring(indexOfSlash, indexOfQuestionMark)
+    @query = url.substring(indexOfQuestionMark, endQuery)
+
+  # Stores the instance variables from the specified location object
+  storeLocation: (location) ->
+    @domain = location.host
+    @hash = location.hash
+    @path = location.pathname
+    @protocol = location.protocol.replace(':', '')
+    @query = location.search
+
+  # Returns the full url
+  full: ->
+    @fullWithoutHash() + @hash
+
+  # Returns the full url except the hash part
+  fullWithoutHash: ->
+    url = if @protocol then @protocol + '://' else ''
+    url + @domain + @path + @query
+
+
+  # Returns true if this url and the specified one are the same. The URLs
+  # are considered the same if protocol, domain, path and query are the same.
+  # (Yes, the hash part is ignored.)
+  isSame: (url) ->
+    @protocol is url.protocol and
+    @domain is url.domain and
+    @path is url.path and
+    @query is url.query
+
+  # Returns true if this url and the specified one are in the same domain 
+  isSameDomain: (url) ->
+    @domain is url.domain
