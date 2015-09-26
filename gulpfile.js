@@ -7,14 +7,14 @@ var gutil  = require('gulp-util');
 var rename = require('gulp-rename');
 
 gulp.task('coffee', function coffeee() {
-    gulp.src(['reflinks.coffee'])
+    return gulp.src(['reflinks.coffee'])
         .pipe(coffee({bare: false}))
         .on('error', gutil.log)
         .pipe(gulp.dest('./build'));
 });
 
 gulp.task('minify', function minify() {
-    gulp.src(['build/reflinks.js'])
+    return gulp.src(['build/reflinks.js'])
         .pipe(uglify())
         .pipe(rename('reflinks.min.js'))
         .pipe(gulp.dest('./build'));

@@ -5,6 +5,14 @@ unless window.history and window.history.pushState
 # Global reference to the Reflinks object
 Reflinks = @Reflinks = {}
 
+Reflinks.logTransitions =  ->
+  document.addEventListener(EVENTS.LOAD, () ->
+    console.log("[TRANSITION]", currentLocationUrl.full())
+  )
+  document.addEventListener(EVENTS.RESTORE, () ->
+    console.log("[TRANSITION popstate]", currentLocationUrl.full())
+  )
+
 # Returns true if the specified suffix is at the end of the of the specified str
 strEndsWith = (str, suffix) ->
   str.indexOf(suffix, str.length - suffix.length) isnt -1
@@ -15,30 +23,11 @@ strEndsWith = (str, suffix) ->
 shouldKeepOnPage = (elm) ->
   keepElements.indexOf(elm) isnt -1
 
-# Returns the specified url without the protocol prefix (http, https and file
-# are checked for)
-urlWithoutProtocol = (url) ->
-  url.replace('http://', '').replace('https://', '').replace('file://', '')
-
-# Returns true if the specified url has a hash part
-urlHasHash = (url) -> url.indexOf('#') isnt -1
-
-# Returns the specified url without the hash part
-urlWithoutHash = (url) ->
-  indexOfHash = url.indexOf '#'
-  if indexOfHash is -1 then url else url.substring(0, indexOfHash)
-
-# Returns the specified url without protocol (http, https or file) and
-# hash part.
-urlWithoutProtocolAndHash = (url) ->
-  urlWithoutProtocol(urlWithoutHash(url))
-
 # Returns true if the specified URL is a hash navigation (focusing an element
 # with an ID)
 isHashNavigation = (url) ->
-  currentUrl = urlWithoutProtocolAndHash(document.location.href)
-  cleanUrl = urlWithoutProtocolAndHash(url)
-  return urlHasHash(url) and currentUrl == cleanUrl
+  url = new Url(url)
+  return url.hash and currentLocationUrl.isSame(url)
 
 # Converts the specified html string to DOM elements. An array is always
 # returned even if the specified string describes a single element.
@@ -91,6 +80,7 @@ EVENTS =
   BEFORE_UNLOAD: 'reflinks:before-unload'
   BEFORE_LOAD: 'reflinks:before-load'
   BEFORE_RELOAD: 'reflinks:before-reload'
+  RESTORE: 'reflinks:restore'
 
 # Functions that will execute after a request is completed. This is useful
 # for restoring the state of elements that have data-processing attributes.
@@ -100,7 +90,7 @@ rollbackAfterLoad = []
 cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
   key = if typeof name is 'string' then name else name.fullWithoutHash()
   currentCacheRef = cacheReferences[key] =
-    location: document.location.href
+    location: new Url(document.location)
     documentRoot: documentRoot
     once: once
 
@@ -115,8 +105,9 @@ cacheOnce = Reflinks.cacheOnce = (name) ->
 # only specify the path location and not the full url. The browser only accepts
 # redirects from the same origin, so we're safe here.
 getLocationCache = (location) ->
+  locationUrl = new Url(location)
   for cache of cacheReferences
-    if cacheReferences[cache].location is location or strEndsWith(cacheReferences[cache].location, location)
+    if cacheReferences[cache].location.isSame(locationUrl) or strEndsWith(cacheReferences[cache].location.fullWithoutHash(), location)
       return cacheReferences[cache]
   null
 
@@ -138,9 +129,11 @@ maybeAutofocusElement = ->
   if autofocusElement and document.activeElement isnt autofocusElement
     autofocusElement.focus()
 
-# Stores the current location to the currentLocationUrl variable
+# Stores the current location to the currentLocationUrl variable and updates
+# currentCacheRef to (maybe) the cache of the current page.
 storeCurrentLocationUrl = ->
   currentLocationUrl = new Url(document.location)
+  currentCacheRef = getLocationCache(currentLocationUrl.fullWithoutHash())
 
 # Default events of Reflinks
 document.addEventListener(EVENTS.LOAD, rollbackProcessingElements)
@@ -287,7 +280,7 @@ handleAnchorNavigation = (elm, ev) ->
   return if elm.getAttribute 'data-noreflink'
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
-  return 'nothing to do here' if isHashNavigation(href)
+  return 'hash change, nothing to do here' if isHashNavigation(href)
   ev.preventDefault()
   triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   maybeUpdateProcessingFeedback(elm)
@@ -373,6 +366,7 @@ restoreFromCache = (method, location, skipPushHistory) ->
   storeCurrentLocationUrl()
   restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
+  triggerEvent EVENTS.RESTORE, {method, location}
   cache
 
 # Hides the current documentRoot and shows the element stored in the specified
@@ -494,15 +488,23 @@ class Url
     @protocol = 'https' if url.indexOf('https://') isnt -1
     url = url.replace(@protocol + '://', '')
     indexOfHash = url.indexOf('#')
-    @hash = ''
+    indexOfSlash = if url.indexOf('/') is -1 then url.length else url.indexOf('/')
+    indexOfQuestionMark = if url.indexOf('?', indexOfSlash) is -1 then url.length else url.indexOf('?', indexOfSlash)
+    endQuery = if indexOfHash is -1 then url.length else indexOfHash
+    @domain = url.substring(0, indexOfSlash)
     if indexOfHash isnt -1
       @hash = url.substring(indexOfHash, url.length)
-    indexOfSlash = if url.indexOf('/') is -1 then url.length else url.indexOf('/')
-    endQuery = if indexOfHash is -1 then url.length else indexOfHash
-    indexOfQuestionMark = if url.indexOf('?', indexOfSlash) is -1 then url.length else url.indexOf('?', indexOfSlash)
-    @domain = url.substring(0, indexOfSlash)
-    @path = url.substring(indexOfSlash, indexOfQuestionMark)
-    @query = url.substring(indexOfQuestionMark, endQuery)
+      @path = url.substring(indexOfSlash, Math.min(indexOfHash, indexOfQuestionMark))
+    else
+      @hash = ''
+      @path = url.substring(indexOfSlash, indexOfQuestionMark)
+    # Substring works backwards if the first index is greater than the second.
+    # The url might have a hash but no @query, resulting in this backwards search.
+    # This check prevents it.
+    if indexOfQuestionMark < endQuery
+      @query = url.substring(indexOfQuestionMark, endQuery)
+    else
+      @query = ''
 
   # Stores the instance variables from the specified location object
   storeLocation: (location) ->
@@ -521,7 +523,6 @@ class Url
     url = if @protocol then @protocol + '://' else ''
     url + @domain + @path + @query
 
-
   # Returns true if this url and the specified one are the same. The URLs
   # are considered the same if protocol, domain, path and query are the same.
   # (Yes, the hash part is ignored.)
@@ -534,3 +535,4 @@ class Url
   # Returns true if this url and the specified one are in the same domain 
   isSameDomain: (url) ->
     @domain is url.domain
+

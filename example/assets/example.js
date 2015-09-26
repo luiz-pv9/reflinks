@@ -2,6 +2,7 @@ window.addEventListener('load', onLoad);
 document.addEventListener('reflinks:load', onLoad);
 document.addEventListener('reflinks:timeout', onTimeout);
 
+Reflinks.logTransitions();
 Reflinks.xhrTimeout = 500;
 
 function onLoad() {
@@ -10,6 +11,4 @@ function onLoad() {
 
 function onTimeout(ev) {
   console.log("timed out... but just keep on");
-  // Just keep going
-	// document.location.href = ev.data.url;
 };
