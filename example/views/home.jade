@@ -9,6 +9,21 @@ block content
 
   hr
 
+  ul.nav.nav-tabs(role="tablist")
+    li.active(role="presentation")
+      a(href="#home", aria-controls="home", role="tab" data-toggle="tab") Home
+    li(role="presentation")
+      a(href="#profile", aria-controls="profile", role="tab" data-toggle="tab") Profile
+    li(role="presentation")
+      a(href="#messages", aria-controls="messages", role="tab" data-toggle="tab") Messages
+
+  .tab-content
+    #home.tab-pane.active(role="tabpanel") Conteúdo HOME
+    #profile.tab-pane(role="tabpanel") Conteúdo PROFILE
+    #messages.tab-pane(role="tabpanel") Conteúdo MESSAGES
+
+  hr
+
   a(href="#b1") B1
   a(href="#b2") B2
   a(href="#b3") B3
@@ -20,3 +35,4 @@ block content
   #b2.well B2 CONTENT
   #b3.well B3 CONTENT
   #b4.well B4 CONTENT
+
