@@ -5,6 +5,10 @@ document.addEventListener('reflinks:timeout', onTimeout);
 Reflinks.logTransitions();
 Reflinks.xhrTimeout = 500;
 
+setTimeout(function() {
+  Reflinks.visit('/items');
+}, 2000);
+
 function onLoad() {
   Reflinks.cache();
 };

@@ -7,13 +7,14 @@ Reflinks = @Reflinks = {}
 
 # Visits the specified url.
 Reflinks.visit = (href, method = 'GET') ->
-  if isLocationCached(href)
+  url = new Url(href).fullWithoutHash()
+  if isLocationCached(url)
     # restoreFromCache returns the cache reference or null if nothing was found
-    cache = restoreFromCache(method, href)
+    cache = restoreFromCache(method, url)
     # After restoring the cache to improve the user experience a new
     # request is issued to grab the updated version of the page
     if cache
-      refreshCurrentPage(method, href, cache) unless cache.once
+      refreshCurrentPage(method, url, cache) unless cache.once
   else
     asyncRequest(method, href)
 
@@ -520,13 +521,17 @@ class Url
     @query = location.search
 
   # Returns the full url
-  full: ->
-    @fullWithoutHash() + @hash
+  full: -> @fullWithoutHash() + @hash
 
   # Returns the full url except the hash part
   fullWithoutHash: ->
-    url = if @protocol then @protocol + '://' else ''
-    url + @domain + @path + @query
+    url = if @protocol then @protocol + '://' else currentLocationUrl.protocol
+    url + @domainOrCurrent() + @path + @query
+
+  # Returns the domain of the URL or the current domain if it is
+  # not specified.
+  domainOrCurrent: ->
+    @domain or currentLocationUrl.domain
 
   # Returns true if this url and the specified one are the same. The URLs
   # are considered the same if protocol, domain, path and query are the same.
