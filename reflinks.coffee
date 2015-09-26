@@ -5,6 +5,19 @@ unless window.history and window.history.pushState
 # Global reference to the Reflinks object
 Reflinks = @Reflinks = {}
 
+# Visits the specified url.
+Reflinks.visit = (href, method = 'GET') ->
+  if isLocationCached(href)
+    # restoreFromCache returns the cache reference or null if nothing was found
+    cache = restoreFromCache(method, href)
+    # After restoring the cache to improve the user experience a new
+    # request is issued to grab the updated version of the page
+    if cache
+      refreshCurrentPage(method, href, cache) unless cache.once
+  else
+    asyncRequest(method, href)
+
+# Prints to the console everytime a page transitions happens.
 Reflinks.logTransitions =  ->
   document.addEventListener(EVENTS.LOAD, () ->
     console.log("[TRANSITION]", currentLocationUrl.full())
@@ -284,15 +297,7 @@ handleAnchorNavigation = (elm, ev) ->
   ev.preventDefault()
   triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   maybeUpdateProcessingFeedback(elm)
-  if isLocationCached(href)
-    # restoreFromCache returns the cache reference or null if nothing was found
-    cache = restoreFromCache(method, href)
-    # After restoring the cache to improve the user experience a new
-    # request is issued to grab the updated version of the page
-    if cache
-      refreshCurrentPage(method, href, cache) unless cache.once
-  else
-    asyncRequest(method, href)
+  Reflinks.visit(href, method)
 
 # Serializes the specified object to the query string format
 serializeToQueryString = (obj) ->
