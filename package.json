@@ -1,18 +1,21 @@
 {
-    "name": "Reflinks",
-    "version": "0.1.0",
-    "scripts": {
-        "gulp": "gulp",
-        "start": "node ./example/server.js"
-    },
-    "devDependencies": {
-        "gulp": "3.9.0",
-        "gulp-coffee": "2.3.1",
-        "gulp-uglify": "1.2.0",
-        "gulp-util": "3.0.6",
-        "gulp-rename": "1.2.2",
-        "express": "4.13.3",
-        "jade": "1.11.0",
-        "body-parser": "1.13.3"
-    }
+  "name": "Reflinks",
+  "version": "0.1.0",
+  "scripts": {
+    "gulp": "gulp",
+    "start": "node ./example-default/server.js"
+  },
+  "devDependencies": {
+    "gulp": "3.9.0",
+    "gulp-coffee": "2.3.1",
+    "gulp-uglify": "1.2.0",
+    "gulp-util": "3.0.6",
+    "gulp-rename": "1.2.2",
+    "express": "4.13.3",
+    "jade": "1.11.0",
+    "body-parser": "1.13.3"
+  },
+  "dependencies": {
+    "gulp-concat": "^2.6.0"
+  }
 }

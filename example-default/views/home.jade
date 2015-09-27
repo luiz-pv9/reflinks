@@ -1,0 +1,23 @@
+extends ./index.jade
+
+block content
+  h2 Index page
+  a(class="btn btn-primary", href="/items") See items
+  a(class="btn btn-danger", href="/exception") See error
+  a(class="btn btn-warning", href="/google") See google
+  a(class="btn btn-info", href="/timeout") See timeout
+
+  hr
+
+  a(href="#b1") B1
+  a(href="#b2") B2
+  a(href="#b3") B3
+  a(href="#b4") B4
+
+  hr
+
+  #b1.well B1 CONTENT
+  #b2.well B2 CONTENT
+  #b3.well B3 CONTENT
+  #b4.well B4 CONTENT
+

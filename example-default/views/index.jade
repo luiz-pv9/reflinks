@@ -1,0 +1,19 @@
+html
+  head
+    link(rel="stylesheet", href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css")
+    script(type="text/javascript", src="/reflinks-default.js")
+    script(type="text/javascript", src="/example-default.js")
+    title Reflinks
+  body
+    .container
+      h1 Reflinks example application!!
+      a(href="/") Home
+    .container
+      .row
+        .col-md-8
+          .root-content(data-reflinks-root="1")
+            block content
+        .col-md-4
+          a.twitter-timeline(href='https://twitter.com/luizpv9', data-widget-id='643956503460843520') Tweets by @luizpv9
+          script(type="text/javascript")
+            !function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");

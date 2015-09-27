@@ -2,64 +2,107 @@ unless window.history and window.history.pushState
   console.warn("Reflinks not available in this browser")
   return
 
-# Global reference to the Reflinks object
+# The Url class represents a single URL and provides helper methods to decide
+# things such as: does the url have hash? does it has query params? is it
+# in the same domain as the current application?
+class Url
+  constructor: (arg) ->
+    if arg instanceof Url
+      @storeUrl(arg)
+    if typeof arg is 'string'
+      @storeAndSplit(arg)
+    else if arg and arg.href and arg.pathname # location object
+      @storeLocation(arg)
+
+  # Copies all properties from the brother url! :)
+  # Called by the constructor.
+  storeUrl: (url) ->
+    @protocol = url.protocol
+    @domain = url.domain
+    @hash = url.hash
+    @query = url.query
+    @path = url.path
+
+  # Splits the specified url to help answer questions about the URL
+  storeAndSplit: (url) ->
+    @protocol = 'http' if url.indexOf('http://') isnt -1
+    @protocol = 'https' if url.indexOf('https://') isnt -1
+    url = url.replace(@protocol + '://', '')
+    indexOfHash = url.indexOf('#')
+    indexOfSlash = if url.indexOf('/') is -1 then url.length else url.indexOf('/')
+    indexOfQuestionMark = if url.indexOf('?', indexOfSlash) is -1 then url.length else url.indexOf('?', indexOfSlash)
+    endQuery = if indexOfHash is -1 then url.length else indexOfHash
+    @domain = url.substring(0, indexOfSlash)
+    if indexOfHash isnt -1
+      @hash = url.substring(indexOfHash, url.length)
+      @path = url.substring(indexOfSlash, Math.min(indexOfHash, indexOfQuestionMark))
+    else
+      @hash = ''
+      @path = url.substring(indexOfSlash, indexOfQuestionMark)
+    # Substring works backwards if the first index is greater than the second.
+    # The url might have a hash but no @query, resulting in this backwards search.
+    # This check prevents it.
+    if indexOfQuestionMark < endQuery
+      @query = url.substring(indexOfQuestionMark, endQuery)
+    else
+      @query = ''
+
+  # Stores the instance variables from the specified location object
+  storeLocation: (location) ->
+    @domain = location.host
+    @hash = location.hash
+    @path = location.pathname
+    @protocol = location.protocol.replace(':', '')
+    @query = location.search
+
+  # Returns the full url
+  full: -> @fullWithoutHash() + @hash
+
+  # Returns the full url except the hash part
+  fullWithoutHash: ->
+    url = if @protocol then @protocol + '://' else currentLocationUrl.protocol
+    url + @domainOrCurrent() + @path + @query
+
+  # Returns the domain of the URL or the current domain if it is
+  # not specified.
+  domainOrCurrent: ->
+    @domain or currentLocationUrl.domain
+
+  # Returns true if this url and the specified one are the same. The URLs
+  # are considered the same if protocol, domain, path and query are the same.
+  # (Yes, the hash part is ignored.)
+  isSame: (url) ->
+    @protocol is url.protocol and
+    @domain is url.domain and
+    @path is url.path and
+    @query is url.query
+
+  # Returns true if this url and the specified one have the same path (and domain).
+  isSamePath: (url) ->
+    @isSameDomain(url) and @path is url.path
+
+  # Retunrs true if the current url (!! and not the url in the arguments !!) path
+  # placeholders matches the specified url path (and domain).
+  matches: (url) ->
+    urlParts = url.path?.split('/')
+    parts = @path.split('/')
+    return false unless urlParts.length is parts.length
+    @latestMatchedParams = {}
+    for i in [0..parts.length]
+      part = parts[i]
+      urlPart = urlParts[i]
+      unless part is urlPart or part.indexOf(':') is 0
+        return false
+      if part and part.indexOf(':') is 0
+        @latestMatchedParams[part.replace(':', '')] = urlPart
+    true
+
+  # Returns true if this url and the specified one are in the same domain 
+  isSameDomain: (url) ->
+    @domainOrCurrent() is url.domainOrCurrent()
+
+# Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
-
-# Visits the specified url.
-Reflinks.visit = (href, method = 'GET') ->
-  url = new Url(href).fullWithoutHash()
-  if isLocationCached(url)
-    # restoreFromCache returns the cache reference or null if nothing was found
-    cache = restoreFromCache(method, url)
-    # After restoring the cache to improve the user experience a new
-    # request is issued to grab the updated version of the page
-    if cache
-      refreshCurrentPage(method, url, cache) unless cache.once
-  else
-    asyncRequest(method, href)
-
-# Prints to the console everytime a page transitions happens.
-Reflinks.logTransitions =  ->
-  document.addEventListener(EVENTS.LOAD, () ->
-    console.log("[TRANSITION]", currentLocationUrl.full())
-  )
-  document.addEventListener(EVENTS.RESTORE, () ->
-    console.log("[TRANSITION popstate]", currentLocationUrl.full())
-  )
-
-# Returns true if the specified suffix is at the end of the of the specified str
-strEndsWith = (str, suffix) ->
-  str.indexOf(suffix, str.length - suffix.length) isnt -1
-
-# Returns true if the specified element should be kept on the page, and false
-# if not. The only usage of this now is the ProgressBar that should always
-# be on the page.
-shouldKeepOnPage = (elm) ->
-  keepElements.indexOf(elm) isnt -1
-
-# Returns true if the specified URL is a hash navigation (focusing an element
-# with an ID)
-isHashNavigation = (url) ->
-  url = new Url(url)
-  return url.hash and currentLocationUrl.isSame(url)
-
-# Converts the specified html string to DOM elements. An array is always
-# returned even if the specified string describes a single element.
-toElements = (htmlString) ->
-  div = document.createElement 'div'
-  div.innerHTML = htmlString
-  div.childNodes
-
-# Emits the specified event to the document variable
-triggerEvent = (eventName, data) ->
-  event = document.createEvent 'Events'
-  event.data = data if data
-  event.initEvent eventName, true, true
-  document.dispatchEvent event
-
-# Updates the title of the page that appears in the browser's tab.
-updateTitle = (title) ->
-  document.title = title
 
 # Showing the progress bar for fast requests makes the application seem
 # slower. The 'progressBarDelay' variable specifies the amount of time
@@ -99,6 +142,126 @@ EVENTS =
 # Functions that will execute after a request is completed. This is useful
 # for restoring the state of elements that have data-processing attributes.
 rollbackAfterLoad = []
+
+# Visits the specified url.
+Reflinks.visit = (href, method = 'GET') ->
+  url = new Url(href).fullWithoutHash()
+  if isLocationCached(url)
+    # restoreFromCache returns the cache reference or null if nothing was found
+    cache = restoreFromCache(method, url)
+    # After restoring the cache to improve the user experience a new
+    # request is issued to grab the updated version of the page
+    if cache
+      refreshCurrentPage(method, url, cache) unless cache.once
+  else
+    asyncRequest(method, href)
+
+# Store all navigation callbacks specified by the user using the 'Reflinks.when'
+# method.
+navigationCallbacks = []
+
+# Iterates through the navigationCallbacks array and tries to match the specified
+# url. Returns the found navigationCallback object or undefined if nothing is found.
+findNavigationCallback = (url) ->
+  url = new Url(url)
+  for nc in navigationCallbacks
+    return nc if nc.url.matches(url)
+
+# Tries to find the navigationCallback for the specified url and returns it.
+# If nothing is found a new object is created and inserted in the navigationCallbacks
+# array.
+findOrCreateNavigationCallback = (url) ->
+  url = new Url(url)
+  navigationCallback = findNavigationCallback url
+  return navigationCallback if navigationCallback
+  navigationCallback = {url}
+  navigationCallbacks.push(navigationCallback)
+  navigationCallback
+
+# This method associates the callback to the specified url. When the
+# user navigates to the url the callback is called with the title of
+# and document root of the page. This is useful for defining behaviour
+# that should only happen on specific pages.
+# Important: the callback is only fired if the page is updated through
+# an async request. If the page is only restore from cache (back button in
+# the browser) the callback will not be fired.
+Reflinks.when = (url, callback, config = {}) ->
+  nc = findOrCreateNavigationCallback(url)
+  nc.callbacks = nc.callbacks or []
+  callback._config = config
+  nc.callbacks.push(callback)
+
+# Removes the navigation callback for the specified url.
+# If no callback is specified (second argument) all callbacks
+# are removed.
+Reflinks.clearNavigation = (url, callback) ->
+  nc = findNavigationCallback(url)
+  return 'no navigation callback found' unless nc
+  if callback
+    nc.callbacks.splice(nc.callbacks.indexOf(callback), 1)
+  else
+    nc.callbacks = []
+
+# This method is called every time the 'load' event is fired. It tries
+# to find callbacks for the specified event and calls them.
+callNavigationCallbacks = (ev) ->
+  navigationCallback = findNavigationCallback ev.data.url
+  if navigationCallback
+    for callback in navigationCallback.callbacks
+      latestMatchedParams = navigationCallback.url.latestMatchedParams
+      callbackConfigPass = true
+      for param of callback._config
+        unless callback._config[param](latestMatchedParams[param])
+          callbackConfigPass = false
+          break
+      callback({ev, params: latestMatchedParams}) if callbackConfigPass
+
+# Registers the navigation callbacks check to the 'reflinks:load' event.
+document.addEventListener(EVENTS.LOAD, callNavigationCallbacks)
+
+# The callbacks should be fired when the page loads the first time.
+# The object passed to 'callNavigationCallbacks'
+window.addEventListener('load', -> callNavigationCallbacks({data: {url: document.location.href}}))
+
+# Prints to the console everytime a page transitions happens. This is
+# only useful for debugging issues.
+Reflinks.logTransitions = ->
+  document.addEventListener(EVENTS.LOAD, -> console.log("[TRANSITION]", currentLocationUrl.full()))
+  document.addEventListener(EVENTS.RESTORE, -> console.log("[TRANSITION]", currentLocationUrl.full()))
+
+# Returns true if the specified suffix is at the end of the of the specified str
+strEndsWith = (str, suffix) ->
+  str.indexOf(suffix, str.length - suffix.length) isnt -1
+
+# Returns true if the specified element should be kept on the page, and false
+# if not. The only usage of this now is the ProgressBar that should always
+# be on the page.
+shouldKeepOnPage = (elm) ->
+  keepElements.indexOf(elm) isnt -1
+
+# Returns true if the specified URL is a hash navigation (focusing an element
+# with an ID)
+isHashNavigation = (url) ->
+  url = new Url(url)
+  return url.hash and currentLocationUrl.isSame(url)
+
+# Converts the specified html string to DOM elements. An array is always
+# returned even if the specified string describes a single element.
+toElements = (htmlString) ->
+  div = document.createElement 'div'
+  div.innerHTML = htmlString
+  div.childNodes
+
+# Emits the specified event to the document variable
+triggerEvent = (eventName, data) ->
+  event = document.createEvent 'Events'
+  event.data = data if data
+  event.initEvent eventName, true, true
+  document.dispatchEvent event
+
+# Updates the title of the page that appears in the browser's tab.
+updateTitle = (title) ->
+  document.title = title
 
 # Caches the current page associated with the specified name.
 cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
@@ -152,7 +315,8 @@ storeCurrentLocationUrl = ->
 # Default events of Reflinks
 document.addEventListener(EVENTS.LOAD, rollbackProcessingElements)
 document.addEventListener(EVENTS.LOAD, maybeAutofocusElement)
-document.addEventListener(EVENTS.LOAD, storeCurrentLocationUrl)
+# document.addEventListener(EVENTS.LOAD, storeCurrentLocationUrl)
+storeCurrentLocationUrl()
 
 # The app must have a document root. It defaults to the whole body, but the
 # user can change it with the data-reflinks-root attribute. Everything
@@ -436,11 +600,11 @@ onRequestSuccess = (content, url, skipPushHistory) ->
     appendRootContents(rootNodes)
   window.history.pushState({reflinks: true, href: document.location.href}, "", url) unless skipPushHistory
   storeCurrentLocationUrl()
-  triggerEvent EVENTS.LOAD, {nodes: rootNodes}
+  triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
 
 # Callback called when an AJAX request to update the current page succeeds. The
 # currentLocationUrl is already updated when this function runs.
-onRefreshSuccess = (content) ->
+onRefreshSuccess = (content, url) ->
   Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
@@ -450,7 +614,7 @@ onRefreshSuccess = (content) ->
   triggerEvent EVENTS.BEFORE_RELOAD, {nodes: rootNodes}
   removeRootContents()
   appendRootContents(rootNodes)
-  triggerEvent EVENTS.LOAD, {nodes: rootNodes}
+  triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
@@ -477,72 +641,4 @@ currentPageScroll = ->
 # Scrolls the current page to the specified offset
 restorePageScroll = (offset) ->
   window.scrollTo offset.positionX, offset.positionY
-
-# The Url class represents a single URL and provides helper methods to decide
-# things such as: does the url have hash? does it has query params? is it
-# in the same domain as the current application?
-class Url
-  constructor: (arg) ->
-    if typeof arg is 'string'
-      @storeAndSplit(arg)
-    else if arg.href and arg.pathname # location object
-      @storeLocation(arg)
-
-  # Splits the specified url to help answer questions about the URL
-  storeAndSplit: (url) ->
-    @protocol = 'http' if url.indexOf('http://') isnt -1
-    @protocol = 'https' if url.indexOf('https://') isnt -1
-    url = url.replace(@protocol + '://', '')
-    indexOfHash = url.indexOf('#')
-    indexOfSlash = if url.indexOf('/') is -1 then url.length else url.indexOf('/')
-    indexOfQuestionMark = if url.indexOf('?', indexOfSlash) is -1 then url.length else url.indexOf('?', indexOfSlash)
-    endQuery = if indexOfHash is -1 then url.length else indexOfHash
-    @domain = url.substring(0, indexOfSlash)
-    if indexOfHash isnt -1
-      @hash = url.substring(indexOfHash, url.length)
-      @path = url.substring(indexOfSlash, Math.min(indexOfHash, indexOfQuestionMark))
-    else
-      @hash = ''
-      @path = url.substring(indexOfSlash, indexOfQuestionMark)
-    # Substring works backwards if the first index is greater than the second.
-    # The url might have a hash but no @query, resulting in this backwards search.
-    # This check prevents it.
-    if indexOfQuestionMark < endQuery
-      @query = url.substring(indexOfQuestionMark, endQuery)
-    else
-      @query = ''
-
-  # Stores the instance variables from the specified location object
-  storeLocation: (location) ->
-    @domain = location.host
-    @hash = location.hash
-    @path = location.pathname
-    @protocol = location.protocol.replace(':', '')
-    @query = location.search
-
-  # Returns the full url
-  full: -> @fullWithoutHash() + @hash
-
-  # Returns the full url except the hash part
-  fullWithoutHash: ->
-    url = if @protocol then @protocol + '://' else currentLocationUrl.protocol
-    url + @domainOrCurrent() + @path + @query
-
-  # Returns the domain of the URL or the current domain if it is
-  # not specified.
-  domainOrCurrent: ->
-    @domain or currentLocationUrl.domain
-
-  # Returns true if this url and the specified one are the same. The URLs
-  # are considered the same if protocol, domain, path and query are the same.
-  # (Yes, the hash part is ignored.)
-  isSame: (url) ->
-    @protocol is url.protocol and
-    @domain is url.domain and
-    @path is url.path and
-    @query is url.query
-
-  # Returns true if this url and the specified one are in the same domain 
-  isSameDomain: (url) ->
-    @domain is url.domain
 
