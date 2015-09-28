@@ -1,18 +1,8 @@
-window.addEventListener('load', onLoad);
-document.addEventListener('reflinks:load', onLoad);
-document.addEventListener('reflinks:timeout', onTimeout);
+var app = angular.module('example', ['reflinks']);
 
-Reflinks.logTransitions();
-Reflinks.xhrTimeout = 500;
+app.controller('AppController', AppController);
 
-setTimeout(function() {
-  Reflinks.visit('/items');
-}, 2000);
-
-function onLoad() {
-  Reflinks.cache();
+AppController.$inject = [];
+function AppController() {
 };
 
-function onTimeout(ev) {
-  console.log("timed out... but just keep on");
-};

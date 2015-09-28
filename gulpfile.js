@@ -17,10 +17,6 @@ var plugins = {
   'angular': {
     files: defaultFiles.concat(['reflinks-angular.coffee']),
     build: 'reflinks-angular.min.js'
-  },
-  'jquery': {
-    files: defaultFiles.concat(['reflinks-jquery.coffee']),
-    build: 'reflinks-angular.min.js'
   }
 };
 
