@@ -1,8 +1,9 @@
-var app = angular.module('example', ['reflinks']);
+var app = angular.module('reflinks-angular', ['reflinks'])
 
-app.controller('AppController', AppController);
+.config(function(reflinksConfigProvider) {
+  console.log(">>>", reflinksConfigProvider);
+});
 
-AppController.$inject = [];
-function AppController() {
-};
+app.controller('AppController', function AppController() {
+});
 
