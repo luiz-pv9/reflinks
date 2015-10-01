@@ -631,7 +631,7 @@ getTitle = (html) ->
 # Returns the body of the specified HTML. The HTML should be a string and not
 # a DOM element.
 getBody = (html) ->
-  matches = /<body>([^]*?)<\/body>/.exec(html)
+  matches = /<body[\s\S]*?>([\s\S]*?)<\/body>/i.exec(html)
   if matches and matches[1] then matches[1] else ""
 
 # This function returns the scroll offset of the current page
