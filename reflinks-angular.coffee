@@ -10,11 +10,21 @@ reflinksModule.provider('reflinks', ->
   # will be compiled against this scope.
   scope = {}
 
+  # Grab a reference to angular injector
+  $injector = angular.injector(['ng'])
+
+  # Compiles the specified nodes against the scope
+  compileNodes = (nodes) ->
+    $injector.invoke(['$compile', ($compile) ->
+      console.log("GATOOOO!!!!!!")
+    ])
+
   # Helper function to register the specified url as 'compilable'.
   @compileWhen = (url) ->
-    Reflinks.when(url, (title, nodes) ->
-      console.log("called!!!")
-      console.log(title, nodes)
+    Reflinks.when(url, (res) ->
+      ev = res.ev
+      if ev.data and ev.data.nodes
+        compileNodes ev.data.nodes
     )
 
   # Scope that the contents of the page will be compiled against.
