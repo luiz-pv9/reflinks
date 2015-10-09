@@ -2,7 +2,7 @@ window.addEventListener('load', onLoad);
 document.addEventListener('reflinks:load', onLoad);
 document.addEventListener('reflinks:timeout', onTimeout);
 
-Reflinks.logTransitions();
+// Reflinks.logTransitions();
 Reflinks.xhrTimeout = 500;
 
 Reflinks.when('/items', itemsCallback1);

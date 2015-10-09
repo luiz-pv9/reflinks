@@ -138,6 +138,10 @@ EVENTS =
   BEFORE_LOAD: 'reflinks:before-load'
   BEFORE_RELOAD: 'reflinks:before-reload'
   RESTORE: 'reflinks:restore'
+  # The transition event is emitted whenever the page is loaded (for new content)
+  # or restored from a cache. It's pretty much the same thing as registering for
+  # for LOAD and RESTORE events.
+  TRANSITION: 'reflinks:transition'
 
 # Functions that will execute after a request is completed. This is useful
 # for restoring the state of elements that have data-processing attributes.
@@ -216,8 +220,13 @@ callNavigationCallbacks = (ev) ->
           break
       callback({ev, params: latestMatchedParams}) if callbackConfigPass
 
+# Tries to store the current page scroll position in the cache (if it exists)
+# This method is called when the event BEFORE_UNLOAD is triggered.
+storeCurrentPageCache = -> currentCacheRef?.scroll = currentPageScroll()
+
 # Registers the navigation callbacks check to the 'reflinks:load' event.
 document.addEventListener(EVENTS.LOAD, callNavigationCallbacks)
+document.addEventListener(EVENTS.BEFORE_UNLOAD, storeCurrentPageCache)
 
 # The callbacks should be fired when the page loads the first time.
 # The object passed to 'callNavigationCallbacks'
@@ -315,7 +324,7 @@ storeCurrentLocationUrl = ->
 # Default events of Reflinks
 document.addEventListener(EVENTS.LOAD, rollbackProcessingElements)
 document.addEventListener(EVENTS.LOAD, maybeAutofocusElement)
-# document.addEventListener(EVENTS.LOAD, storeCurrentLocationUrl)
+document.addEventListener(EVENTS.TRANSITION, storeCurrentLocationUrl)
 storeCurrentLocationUrl()
 
 # The app must have a document root. It defaults to the whole body, but the
@@ -382,7 +391,6 @@ ProgressBar =
 
 # Appends the progressbar to the page body.
 window.addEventListener('load', ->
-  storeCurrentLocationUrl()
   findDocumentRootInPage()
   document.body.appendChild ProgressBar.elm
   # The progress bar should never be removed from the body
@@ -407,7 +415,6 @@ window.addEventListener('popstate', (ev) ->
 # method throug the data-method attribute.
 document.addEventListener('click', (ev) ->
   if ev.target and ev.target.tagName is 'A'
-    currentCacheRef?.scroll = currentPageScroll()
     handleAnchorNavigation(ev.target, ev)
 )
 
@@ -460,7 +467,6 @@ handleAnchorNavigation = (elm, ev) ->
   href = elm.href
   return 'hash change, nothing to do here' if isHashNavigation(href)
   ev.preventDefault()
-  triggerEvent EVENTS.BEFORE_REQUEST, {elm, method, href}
   maybeUpdateProcessingFeedback(elm)
   Reflinks.visit(href, method)
 
@@ -495,6 +501,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
         orf(xhr.responseText, url)
   # I can't think of a reason why not to include cookies.
   xhr.withCredentials = true
+  triggerEvent EVENTS.BEFORE_REQUEST, {method, url, data}
   xhr.send(if data then serializeToQueryString(data) else undefined)
   ProgressBar.start()
 
@@ -537,6 +544,7 @@ restoreFromCache = (method, location, skipPushHistory) ->
   restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
   triggerEvent EVENTS.RESTORE, {method, location}
+  triggerEvent EVENTS.TRANSITION, {method, location}
   cache
 
 # Hides the current documentRoot and shows the element stored in the specified
@@ -601,6 +609,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   window.history.pushState({reflinks: true, href: document.location.href}, "", url) unless skipPushHistory
   storeCurrentLocationUrl()
   triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
+  triggerEvent EVENTS.TRANSITION, {nodes: rootNodes, url}
 
 # Callback called when an AJAX request to update the current page succeeds. The
 # currentLocationUrl is already updated when this function runs.
@@ -615,6 +624,7 @@ onRefreshSuccess = (content, url) ->
   removeRootContents()
   appendRootContents(rootNodes)
   triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
+  triggerEvent EVENTS.TRANSITION, {nodes: rootNodes, url}
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
