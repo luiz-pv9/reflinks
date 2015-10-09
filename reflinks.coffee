@@ -431,6 +431,7 @@ document.addEventListener('click', (ev) ->
 
 # Intercepts all form submissions on the page.
 document.addEventListener('submit', (ev) ->
+  return if shouldIgnoreElement(ev.target)
   ev.preventDefault()
   form = ev.target
   serialized = {}
@@ -442,6 +443,18 @@ document.addEventListener('submit', (ev) ->
   currentCacheRef?.scroll = currentPageScroll()
   asyncRequest(method, url, serialized)
 )
+
+# Returns true if Reflinks should ignore the element. Reflinks
+# ignores elmenets when: 
+#  * it specifies 'data-no-reflinks' attribute
+#  * any of it's parents specifies 'data-no-reflinks' attribute.
+shouldIgnoreElement = (elm) ->
+  return true if elm.getAttribute 'data-no-reflinks'
+  while elm.parentNode
+    return true if elm.getAttribute 'data-no-reflinks'
+    elm = elm.parentNode
+  false
+
 
 # Disable the specified element if the attribute 'data-processing-disable'
 # is present.
@@ -473,7 +486,7 @@ maybeUpdateProcessingFeedback = (elm) ->
 
 # Callback called when the user clicks an anchor element in the page
 handleAnchorNavigation = (elm, ev) ->
-  return if elm.getAttribute 'data-noreflink'
+  return if shouldIgnoreElement(elm)
   method = elm.getAttribute('data-method') or 'GET'
   href = elm.href
   return 'hash change, nothing to do here' if isHashNavigation(href)

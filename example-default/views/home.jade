@@ -2,10 +2,19 @@ extends ./index.jade
 
 block content
   h2 Index page
-  a(class="btn btn-primary", href="/items") See items
-  a(class="btn btn-danger", href="/exception") See error
-  a(class="btn btn-warning", href="/google") See google
-  a(class="btn btn-info", href="/timeout") See timeout
+  .btn-group(role="group")
+    a(class="btn btn-primary", href="/items") See items
+    a(class="btn btn-danger",  href="/exception") See error
+    a(class="btn btn-warning", href="/google") See google
+    a(class="btn btn-info",    href="/timeout") See timeout
+    a(class="btn btn-primary", href="/items", data-no-reflinks) See items (no-reflinks)
+
+  hr
+
+  .well(data-no-reflinks)
+    a(class="btn btn-primary", href="/items") See items (parent no reflinks)
+    .some-container
+      a(class="btn btn-primary", href="/items") See items (parent.parent no reflinks)
 
   hr
 

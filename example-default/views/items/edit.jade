@@ -3,4 +3,5 @@ include ./form
 
 block content
   h2= "Editing #" + item.id
-  +item_form("POST", "/items/" + item.id, item)
+  .edit-form(data-no-reflinks)
+    +item_form("POST", "/items/" + item.id, item)
