@@ -143,6 +143,13 @@ EVENTS =
   # for LOAD and RESTORE events.
   TRANSITION: 'reflinks:transition'
 
+# Event aliases that trigger other events in the application.
+# The TRANSITION event will be triggered whenever LOAD or RESTORE are
+# triggered.
+EVENT_ALIASES = {}
+EVENT_ALIASES[EVENTS.LOAD] = [EVENTS.TRANSITION]
+EVENT_ALIASES[EVENTS.RESTORE] = [EVENTS.TRANSITION]
+
 # Functions that will execute after a request is completed. This is useful
 # for restoring the state of elements that have data-processing attributes.
 rollbackAfterLoad = []
@@ -267,6 +274,10 @@ triggerEvent = (eventName, data) ->
   event.data = data if data
   event.initEvent eventName, true, true
   document.dispatchEvent event
+  aliases = EVENT_ALIASES[eventName]
+  if aliases
+    triggerEvent(eventName, data) for eventName in aliases
+
 
 # Updates the title of the page that appears in the browser's tab.
 updateTitle = (title) ->
@@ -544,7 +555,6 @@ restoreFromCache = (method, location, skipPushHistory) ->
   restorePageScroll(cache.scroll) if cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
   triggerEvent EVENTS.RESTORE, {method, location}
-  triggerEvent EVENTS.TRANSITION, {method, location}
   cache
 
 # Hides the current documentRoot and shows the element stored in the specified
@@ -609,7 +619,6 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   window.history.pushState({reflinks: true, href: document.location.href}, "", url) unless skipPushHistory
   storeCurrentLocationUrl()
   triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
-  triggerEvent EVENTS.TRANSITION, {nodes: rootNodes, url}
 
 # Callback called when an AJAX request to update the current page succeeds. The
 # currentLocationUrl is already updated when this function runs.
@@ -624,7 +633,6 @@ onRefreshSuccess = (content, url) ->
   removeRootContents()
   appendRootContents(rootNodes)
   triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
-  triggerEvent EVENTS.TRANSITION, {nodes: rootNodes, url}
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
