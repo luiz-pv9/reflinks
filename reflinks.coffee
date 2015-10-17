@@ -353,9 +353,9 @@ findDocumentRootInPage = ->
 # from findDocumentRootInPage, searches for the document root 
 findDocumentRoot = (elements) ->
   for element in elements
-    if element.getAttribute('data-reflinks-root')
+    if element.getAttribute and element.getAttribute('data-reflinks-root')
       return element
-    docRoot = element.querySelector('*[data-reflinks-root]')
+    docRoot = element.querySelector and element.querySelector('*[data-reflinks-root]')
     return docRoot if docRoot
   null
 
@@ -438,7 +438,9 @@ document.addEventListener('submit', (ev) ->
   for element in form.elements
     maybeUpdateProcessingFeedback(element)
     serialized[element.name] = element.value
-  method = form.attributes['method'].value or 'POST'
+  method = 'POST'
+  if form.getAttribute('data-reflinks-method')
+    method = form.getAttribute('data-reflinks-method')
   url = form.attributes['action'].value
   currentCacheRef?.scroll = currentPageScroll()
   asyncRequest(method, url, serialized)

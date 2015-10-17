@@ -62,11 +62,14 @@ app.post('/items', function(req, res) {
   res.redirect('/items');
 });
 
-app.post('/items/:id', function(req, res) {
+app.put('/items/:id', function(req, res) {
   var item = findItem(req.params.id);
   item.label = req.body.label;
   item.done = req.body.done;
-  res.redirect('/items/' + item.id);
+  res.status(280);
+  res.header('Location', '/items/' + item.id);
+  res.header('Method', 'GET');
+  res.end();
 });
 
 app.get('/google', function(req, res) {

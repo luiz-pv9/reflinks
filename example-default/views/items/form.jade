@@ -1,6 +1,6 @@
 mixin item_form(method, action, item)
   - item = item || {label: ""}
-  form#item-form(method=method, action=action)
+  form#item-form(method=method, action=action, data-reflinks-method=method)
     .form-group
       label(for="label") Label
       input(id="label", name="label", type="text", class="form-control", value="#{item.label}", data-processing-disable="1", autofocus="true")
