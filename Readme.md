@@ -21,12 +21,12 @@ the location specified in the header `Location` and the callback
 * jQuery
 
 If you're going to use jQuery with Reflinks beware that the `ready` event is only fired
-once. You might do something like the following to check for both `ready' and `reflinks:load`
+once. You might do something like the following to check for both `ready` and `reflinks:load`
 event.
 
 `$(document).on('ready reflinks:load', callback);`
 
-Just make sure you're not doing something like this or you might begin seein events
+Just make sure you're not registering events on the document inside `reflinks:load` or you might experience events
 firing multiple times.
 
 ```javascript
