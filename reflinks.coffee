@@ -761,7 +761,6 @@ escapeRegExp = (str) ->
 getCsrfToken = (html) ->
   regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.csrfMetaTagName) +
     '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/>')
-  # regexp = new RegExp('<meta([\s\S]*?)\/>', 'i')
   matches = regexp.exec(html)
   if matches and matches[1] then matches[1] else ""
 
