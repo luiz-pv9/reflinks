@@ -68,6 +68,13 @@ class Url
   domainOrCurrent: ->
     @domain or currentLocationUrl.domain
 
+  # Adds the specified key=value to the query param of the url
+  setQueryParam: (key, value) ->
+    if @query.indexOf('?') is 0
+      @query += '&' + key + '=' + value
+    else
+      @query = '?' + key + '=' + value
+
   # Returns true if this url and the specified one are the same. The URLs
   # are considered the same if protocol, domain, path and query are the same.
   # (Yes, the hash part is ignored.)
@@ -101,8 +108,18 @@ class Url
   isSameDomain: (url) ->
     @domainOrCurrent() is url.domainOrCurrent()
 
+# CSRF token used by many frameworks. This value is passed along all requests.
+authenticityToken = ''
+
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
+#
+# Name of the attribute that the CSRF token will be assigned to when sending to
+# the server. 'authenticity_token' is the name used by Rails.
+Reflinks.authenticityTokenAttribute = 'authenticity_token'
+
+# Name of the <meta> tag that contains the csrf token
+Reflinks.authenticityMetaTagName = 'csrf-token'
 
 # Showing the progress bar for fast requests makes the application seem
 # slower. The 'progressBarDelay' variable specifies the amount of time
@@ -370,6 +387,12 @@ ProgressBar =
   # Sets the bar loading percentage to 0% and starts the animation. The
   # animation won't stop untill 'done' is called.
   start: ->
+    if ProgressBar.delayTimeoutId
+      clearTimeout(ProgressBar.delayTimeoutId)
+      ProgressBar.delayTimeoutId = null
+    if ProgressBar.interval
+      clearInterval(ProgressBar.interval)
+      ProgressBar.interval = null
     ProgressBar.delayTimeoutId = setTimeout(->
       ProgressBar.elm.style.display = 'block'
       ProgressBar.elm.style.width = '1%'
@@ -406,6 +429,13 @@ window.addEventListener('load', ->
   document.body.appendChild ProgressBar.elm
   # The progress bar should never be removed from the body
   keepElements.push ProgressBar.elm
+
+  # Tries to find csrf-token meta attribute
+  metas = document.getElementsByTagName 'meta'
+  for meta in metas
+    if meta.getAttribute('name') == Reflinks.authenticityMetaTagName
+      authenticityToken = meta.getAttribute('content')
+      break
 )
 
 # popstate event is called when the user presses the 'back' and 'forward'
@@ -439,6 +469,8 @@ document.addEventListener('submit', (ev) ->
     maybeUpdateProcessingFeedback(element)
     serialized[element.name] = element.value
   method = 'POST'
+  if serialized['_method']
+    method = serialized['_method']
   if form.getAttribute('data-reflinks-method')
     method = form.getAttribute('data-reflinks-method')
   url = form.attributes['action'].value
@@ -504,14 +536,26 @@ serializeToQueryString = (obj) ->
       str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]))
   return str.join "&"
 
+# Appends the authenticity token parameter to the url and returns the modified
+# url string.
+addAuthenticityTokenToUrl = (url) ->
+  url = new Url(url)
+  # adds a possible ?authenticity_token=... to the URL.
+  if authenticityToken and authenticityToken isnt ''
+    url.setQueryParam(Reflinks.authenticityTokenAttribute, authenticityToken)
+  return url.fullWithoutHash()
+
+
 # Performs an AJAX request to the specified url. The request is then handleded
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure) ->
+  method = method.toUpperCase()
   Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
   xhr.open(method, url, true)
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
+  xhr.setRequestHeader 'X-CSRF-TOKEN', authenticityToken
   xhrTimeout = setTimeout(->
     triggerEvent EVENTS.TIMEOUT, {xhr, method, url, data}
   , Reflinks.xhrTimeout)
@@ -528,6 +572,9 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   # I can't think of a reason why not to include cookies.
   xhr.withCredentials = true
   triggerEvent EVENTS.BEFORE_REQUEST, {method, url, data}
+  if method isnt 'GET' and authenticityToken
+    data = data or {}
+    data[Reflinks.authenticityTokenAttribute] = authenticityToken
   xhr.send(if data then serializeToQueryString(data) else undefined)
   ProgressBar.start()
 
@@ -603,13 +650,14 @@ updateCacheAndTransitionTo = (url, rootNodes) ->
 
 # This callback is called when the server sends a redirect to Reflinks.redirectStatusCode
 onRedirectSuccess = (xhr) ->
+  Reflinks.xhr = null
   desiredLocation = xhr.getResponseHeader('Location')
   return console.error("'Location' header not found") unless desiredLocation
   desiredMethod = xhr.getResponseHeader('Method') or 'GET'
   currentUrl = new Url(document.location)
   desiredUrl = new Url(desiredLocation)
   if currentUrl.isSameDomain(desiredUrl)
-    document.location.href = desiredUrl.full()
+    Reflinks.visit(desiredUrl.full())
   else
     document.location.href = desiredUrl.full()
 
@@ -618,6 +666,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
+  authenticityToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
@@ -641,6 +690,7 @@ onRefreshSuccess = (content, url) ->
   Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
+  authenticityToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
@@ -665,6 +715,17 @@ getTitle = (html) ->
 # a DOM element.
 getBody = (html) ->
   matches = /<body[\s\S]*?>([\s\S]*?)<\/body>/i.exec(html)
+  if matches and matches[1] then matches[1] else ""
+
+# escape all special characters for use in regex
+escapeRegExp = (str) ->
+  str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&")
+
+getCsrfToken = (html) ->
+  regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.authenticityMetaTagName) +
+    '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/>')
+  # regexp = new RegExp('<meta([\s\S]*?)\/>', 'i')
+  matches = regexp.exec(html)
   if matches and matches[1] then matches[1] else ""
 
 # This function returns the scroll offset of the current page
