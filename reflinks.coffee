@@ -109,17 +109,17 @@ class Url
     @domainOrCurrent() is url.domainOrCurrent()
 
 # CSRF token used by many frameworks. This value is passed along all requests.
-authenticityToken = ''
+csrfToken = ''
 
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
 #
 # Name of the attribute that the CSRF token will be assigned to when sending to
-# the server. 'authenticity_token' is the name used by Rails.
-Reflinks.authenticityTokenAttribute = 'authenticity_token'
+# the server. 'csrf_token' is the name used by Rails.
+Reflinks.csrfTokenAttribute = 'csrf_token'
 
 # Name of the <meta> tag that contains the csrf token
-Reflinks.authenticityMetaTagName = 'csrf-token'
+Reflinks.csrfMetaTagName = 'csrf-token'
 
 # Showing the progress bar for fast requests makes the application seem
 # slower. The 'progressBarDelay' variable specifies the amount of time
@@ -433,8 +433,8 @@ window.addEventListener('load', ->
   # Tries to find csrf-token meta attribute
   metas = document.getElementsByTagName 'meta'
   for meta in metas
-    if meta.getAttribute('name') == Reflinks.authenticityMetaTagName
-      authenticityToken = meta.getAttribute('content')
+    if meta.getAttribute('name') == Reflinks.csrfMetaTagName
+      csrfToken = meta.getAttribute('content')
       break
 )
 
@@ -536,13 +536,13 @@ serializeToQueryString = (obj) ->
       str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]))
   return str.join "&"
 
-# Appends the authenticity token parameter to the url and returns the modified
+# Appends the csrf token parameter to the url and returns the modified
 # url string.
-addAuthenticityTokenToUrl = (url) ->
+addcsrfTokenToUrl = (url) ->
   url = new Url(url)
-  # adds a possible ?authenticity_token=... to the URL.
-  if authenticityToken and authenticityToken isnt ''
-    url.setQueryParam(Reflinks.authenticityTokenAttribute, authenticityToken)
+  # adds a possible ?csrf_token=... to the URL.
+  if csrfToken and csrfToken isnt ''
+    url.setQueryParam(Reflinks.csrfTokenAttribute, csrfToken)
   return url.fullWithoutHash()
 
 
@@ -555,7 +555,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   xhr.open(method, url, true)
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
-  xhr.setRequestHeader 'X-CSRF-TOKEN', authenticityToken
+  xhr.setRequestHeader 'X-CSRF-TOKEN', csrfToken
   xhrTimeout = setTimeout(->
     triggerEvent EVENTS.TIMEOUT, {xhr, method, url, data}
   , Reflinks.xhrTimeout)
@@ -572,9 +572,9 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   # I can't think of a reason why not to include cookies.
   xhr.withCredentials = true
   triggerEvent EVENTS.BEFORE_REQUEST, {method, url, data}
-  if method isnt 'GET' and authenticityToken
+  if method isnt 'GET' and csrfToken
     data = data or {}
-    data[Reflinks.authenticityTokenAttribute] = authenticityToken
+    data[Reflinks.csrfTokenAttribute] = csrfToken
   xhr.send(if data then serializeToQueryString(data) else undefined)
   ProgressBar.start()
 
@@ -666,7 +666,7 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
-  authenticityToken = getCsrfToken(content)
+  csrfToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
@@ -690,7 +690,7 @@ onRefreshSuccess = (content, url) ->
   Reflinks.xhr = null
   ProgressBar.done()
   updateTitle(getTitle(content))
-  authenticityToken = getCsrfToken(content)
+  csrfToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
@@ -722,7 +722,7 @@ escapeRegExp = (str) ->
   str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&")
 
 getCsrfToken = (html) ->
-  regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.authenticityMetaTagName) +
+  regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.csrfMetaTagName) +
     '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/>')
   # regexp = new RegExp('<meta([\s\S]*?)\/>', 'i')
   matches = regexp.exec(html)
