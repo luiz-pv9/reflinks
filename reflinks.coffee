@@ -115,8 +115,8 @@ csrfToken = ''
 Reflinks = @Reflinks = {}
 #
 # Name of the attribute that the CSRF token will be assigned to when sending to
-# the server. 'csrf_token' is the name used by Rails.
-Reflinks.csrfTokenAttribute = 'csrf_token'
+# the server. 'authenticity_token' is the name used by Rails.
+Reflinks.csrfTokenAttribute = 'authenticity_token'
 
 # Name of the <meta> tag that contains the csrf token
 Reflinks.csrfMetaTagName = 'csrf-token'
