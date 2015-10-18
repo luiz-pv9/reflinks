@@ -60,7 +60,8 @@ class Url
 
   # Returns the full url except the hash part
   fullWithoutHash: ->
-    url = if @protocol then @protocol + '://' else currentLocationUrl.protocol
+    url = if @protocol then @protocol else currentLocationUrl.protocol
+    url += '://'
     url + @domainOrCurrent() + @path + @query
 
   # Returns the domain of the URL or the current domain if it is
@@ -113,7 +114,7 @@ csrfToken = ''
 
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
-#
+
 # Name of the attribute that the CSRF token will be assigned to when sending to
 # the server. 'authenticity_token' is the name used by Rails.
 Reflinks.csrfTokenAttribute = 'authenticity_token'
@@ -133,6 +134,9 @@ Reflinks.xhrTimeout = 4000
 # XHR redirects are tricky. This variable specifies a custom status code
 # that Reflinks will understand as a redirect.
 Reflinks.redirectStatusCode = 280
+
+# Maximum number of pages cached at the same time.
+Reflinks.cacheSize = 10
 
 # Elements that will be kept in the page when updating the content.
 keepElements = []
@@ -183,6 +187,13 @@ Reflinks.visit = (href, method = 'GET') ->
       refreshCurrentPage(method, url, cache) unless cache.once
   else
     asyncRequest(method, href)
+
+# Stores in the cache the latest n visited pages in the website.
+Reflinks.cacheLatest = ->
+  # Caches the current page when it finishes loading
+  window.addEventListener 'load', -> Reflinks.cache()
+  # Cache every other page when the page loads
+  document.addEventListener EVENTS.LOAD, -> Reflinks.cache()
 
 # Store all navigation callbacks specified by the user using the 'Reflinks.when'
 # method.
@@ -295,7 +306,6 @@ triggerEvent = (eventName, data) ->
   if aliases
     triggerEvent(eventName, data) for eventName in aliases
 
-
 # Updates the title of the page that appears in the browser's tab.
 updateTitle = (title) ->
   document.title = title
@@ -303,10 +313,37 @@ updateTitle = (title) ->
 # Caches the current page associated with the specified name.
 cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
   key = if typeof name is 'string' then name else name.fullWithoutHash()
-  currentCacheRef = cacheReferences[key] =
-    location: new Url(document.location)
-    documentRoot: documentRoot
-    once: once
+  location = new Url(document.location)
+  previousCache = getLocationCache(location.fullWithoutHash())
+  if previousCache
+    # If there was already a cache, just update currentCacheRef
+    # and make sure documentRoot points to the correct DOM element.
+    currentCacheRef = previousCache
+    currentCacheRef.documentRoot = documentRoot
+    currentCacheRef.cachedAt = new Date().getTime()
+  else
+    currentCacheSize = Object.keys(cacheReferences).length
+
+    # If we're trying to cache something but the cache hits the limit
+    # specified by Reflinks.cacheSize, the oldest cache reference must
+    # be deleted - otherwise reflinks would only grow in memory usage.
+    if Reflinks.cacheSize <= currentCacheSize
+      oldest = Number.POSITIVE_INFINITY
+      cacheKey = null
+      for key, cache of cacheReferences
+        if cache.cachedAt < oldest
+          oldest = cache.cachedAt
+          cacheKey = key
+      if cacheKey
+        delete cacheReferences[cacheKey]
+
+    # Stores the new cache and references it to the currentCacheRef
+    # variable.
+    currentCacheRef = cacheReferences[key] =
+      location: location
+      documentRoot: documentRoot
+      cachedAt: new Date().getTime()
+      once: once
 
 # Caches the current page with the 'once' flag to true. The once flag
 # indicates to Reflinks if a new request must be made to the server to retreive
