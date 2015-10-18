@@ -246,11 +246,11 @@ callNavigationCallbacks = (ev) ->
 
 # Tries to store the current page scroll position in the cache (if it exists)
 # This method is called when the event BEFORE_UNLOAD is triggered.
-storeCurrentPageCache = -> currentCacheRef?.scroll = currentPageScroll()
+storeCurrentPageScroll = -> currentCacheRef?.scroll = currentPageScroll()
 
 # Registers the navigation callbacks check to the 'reflinks:load' event.
 document.addEventListener(EVENTS.LOAD, callNavigationCallbacks)
-document.addEventListener(EVENTS.BEFORE_UNLOAD, storeCurrentPageCache)
+document.addEventListener(EVENTS.BEFORE_UNLOAD, storeCurrentPageScroll)
 
 # The callbacks should be fired when the page loads the first time.
 # The object passed to 'callNavigationCallbacks'
