@@ -758,6 +758,7 @@ getBody = (html) ->
 escapeRegExp = (str) ->
   str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&")
 
+# Returns the content of the csrf meta tag in the HTML body
 getCsrfToken = (html) ->
   regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.csrfMetaTagName) +
     '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/>')
