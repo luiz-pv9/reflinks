@@ -89,6 +89,6 @@ app.get('/timeout', function(req, res) {
 	}, 6000);
 });
 
-app.listen(3000, function() {
-  console.log("Server running on localhost:3000");
+app.listen(4000, function() {
+  console.log("Server running on localhost:4000");
 });

@@ -163,6 +163,9 @@ EVENTS =
   # or restored from a cache. It's pretty much the same thing as registering for
   # for LOAD and RESTORE events.
   TRANSITION: 'reflinks:transition'
+  CLICK: 'reflinks:click'
+  SUBMIT: 'reflinks:submit'
+  STARTED: 'reflinks:started'
 
 # Event aliases that trigger other events in the application.
 # The TRANSITION event will be triggered whenever LOAD or RESTORE are
@@ -176,9 +179,9 @@ EVENT_ALIASES[EVENTS.RESTORE] = [EVENTS.TRANSITION]
 rollbackAfterLoad = []
 
 # Visits the specified url.
-Reflinks.visit = (href, method = 'GET') ->
+Reflinks.visit = (href, method = 'GET', ors) ->
   url = new Url(href).fullWithoutHash()
-  if isLocationCached(url)
+  if isLocationCached(url) and !ors
     # restoreFromCache returns the cache reference or null if nothing was found
     cache = restoreFromCache(method, url)
     # After restoring the cache to improve the user experience a new
@@ -186,7 +189,7 @@ Reflinks.visit = (href, method = 'GET') ->
     if cache
       refreshCurrentPage(method, url, cache) unless cache.once
   else
-    asyncRequest(method, href)
+    asyncRequest(method, href, undefined, undefined, ors)
 
 # Stores in the cache the latest n visited pages in the website.
 Reflinks.cacheLatest = ->
@@ -305,6 +308,7 @@ triggerEvent = (eventName, data) ->
   aliases = EVENT_ALIASES[eventName]
   if aliases
     triggerEvent(eventName, data) for eventName in aliases
+  return event
 
 # Updates the title of the page that appears in the browser's tab.
 updateTitle = (title) ->
@@ -319,6 +323,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
     # If there was already a cache, just update currentCacheRef
     # and make sure documentRoot points to the correct DOM element.
     currentCacheRef = previousCache
+    currentCacheRef.once = once
     currentCacheRef.documentRoot = documentRoot
     currentCacheRef.cachedAt = new Date().getTime()
   else
@@ -335,7 +340,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
           oldest = cache.cachedAt
           cacheKey = key
       if cacheKey
-        delete cacheReferences[cacheKey]
+        clearCache(cacheKey)
 
     # Stores the new cache and references it to the currentCacheRef
     # variable.
@@ -344,6 +349,15 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
       documentRoot: documentRoot
       cachedAt: new Date().getTime()
       once: once
+
+# Removes the documentRoot of the cache and deletes the entry in the
+# cacheRef object.
+clearCache = Reflinks.clearCache = (key) ->
+  console.log(cacheReferences)
+  cacheRef = cacheReferences[key]
+  cacheRef.documentRoot.remove()
+  delete cacheReferences[key]
+
 
 # Caches the current page with the 'once' flag to true. The once flag
 # indicates to Reflinks if a new request must be made to the server to retreive
@@ -401,6 +415,7 @@ documentRoot = document.body
 # This function is called when the page finishes loading.
 findDocumentRootInPage = ->
   customRoot = document.querySelector('*[data-reflinks-root]')
+  console.log("findDocumentRoot")
   documentRoot = customRoot or document.body
 
 # Returns the document root for the specified elements. This function, different
@@ -473,6 +488,8 @@ window.addEventListener('load', ->
     if meta.getAttribute('name') == Reflinks.csrfMetaTagName
       csrfToken = meta.getAttribute('content')
       break
+
+  triggerEvent EVENTS.STARTED
 )
 
 # popstate event is called when the user presses the 'back' and 'forward'
@@ -489,11 +506,22 @@ window.addEventListener('popstate', (ev) ->
     asyncRequest(method, currentUrl, null, true)
 )
 
+# This method is called by the 'click' event on the page to maybe
+# identify an anchor tag.
+maybeAnchorParent = (elm) ->
+  while elm.parentNode
+    return elm.parentNode if elm.parentNode.tagName is 'A'
+    elm = elm.parentNode
+  null
+
 # Intercepts clicks on all links on the page. The element might specify the HTTP
 # method throug the data-method attribute.
 document.addEventListener('click', (ev) ->
   if ev.target and ev.target.tagName is 'A'
     handleAnchorNavigation(ev.target, ev)
+  anchorParent = maybeAnchorParent(ev.target)
+  if anchorParent
+    handleAnchorNavigation(anchorParent, ev)
 )
 
 # Intercepts all form submissions on the page.
@@ -511,6 +539,8 @@ document.addEventListener('submit', (ev) ->
   if form.getAttribute('data-reflinks-method')
     method = form.getAttribute('data-reflinks-method')
   url = form.attributes['action'].value
+  ev = triggerEvent(EVENTS.SUBMIT, {target: form, url: new Url(url).fullWithoutHash(), method})
+  return 'user stopped...' if ev.defaultPrevented
   currentCacheRef?.scroll = currentPageScroll()
   asyncRequest(method, url, serialized)
 )
@@ -559,11 +589,20 @@ maybeUpdateProcessingFeedback = (elm) ->
 handleAnchorNavigation = (elm, ev) ->
   return if shouldIgnoreElement(elm)
   method = elm.getAttribute('data-method') or 'GET'
+  return 'no href attr' unless elm.getAttribute('href')
   href = elm.href
   return 'hash change, nothing to do here' if isHashNavigation(href)
   ev.preventDefault()
+  ev = triggerEvent EVENTS.CLICK, {target: elm, href, method}
+  return 'user stoped request' if ev.defaultPrevented
   maybeUpdateProcessingFeedback(elm)
-  Reflinks.visit(href, method)
+  target = elm.getAttribute('data-reflinks-target')
+  if target
+    console.log("there is a target")
+    Reflinks.visit(href, method, onRequestTargetSuccess.bind(null, target))
+  else
+    console.log("no target")
+    Reflinks.visit(href, method)
 
 # Serializes the specified object to the query string format
 serializeToQueryString = (obj) ->
@@ -698,11 +737,30 @@ onRedirectSuccess = (xhr) ->
   else
     document.location.href = desiredUrl.full()
 
+# This method is called when the response of a request that is intended
+# to be inserted in the specified target
+onRequestTargetSuccess = (target, content, url) ->
+  Reflinks.xhr = null
+  ProgressBar.done()
+  csrfToken = getCsrfToken(content)
+  rootNodes = toElements(getBody(content))
+  customRootNode = findDocumentRoot(rootNodes)
+  rootNodes = customRootNode.childNodes if customRootNode
+  targetElm = document.getElementById(target)
+  while targetElm.firstChild
+    targetElm.removeChild(targetElm.firstChild)
+  nodesToAdd = []
+  for node in rootNodes
+    nodesToAdd.push(node)
+  targetElm.appendChild(node) for node in nodesToAdd
+
+
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
   Reflinks.xhr = null
   ProgressBar.done()
-  updateTitle(getTitle(content))
+  pageTitle = getTitle(content)
+  updateTitle(pageTitle)
   csrfToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
@@ -719,14 +777,15 @@ onRequestSuccess = (content, url, skipPushHistory) ->
     appendRootContents(rootNodes)
   window.history.pushState({reflinks: true, href: document.location.href}, "", url) unless skipPushHistory
   storeCurrentLocationUrl()
-  triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
+  triggerEvent EVENTS.LOAD, {nodes: rootNodes, url, title: pageTitle}
 
 # Callback called when an AJAX request to update the current page succeeds. The
 # currentLocationUrl is already updated when this function runs.
 onRefreshSuccess = (content, url) ->
   Reflinks.xhr = null
   ProgressBar.done()
-  updateTitle(getTitle(content))
+  pageTitle = getTitle(content)
+  updateTitle(pageTitle)
   csrfToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
@@ -734,7 +793,7 @@ onRefreshSuccess = (content, url) ->
   triggerEvent EVENTS.BEFORE_RELOAD, {nodes: rootNodes}
   removeRootContents()
   appendRootContents(rootNodes)
-  triggerEvent EVENTS.LOAD, {nodes: rootNodes, url}
+  triggerEvent EVENTS.LOAD, {nodes: rootNodes, url, title: pageTitle}
 
 # Callback called when an AJAX request fails.
 onRequestFailure = (content, href) ->
