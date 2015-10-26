@@ -165,6 +165,7 @@ EVENTS =
   TRANSITION: 'reflinks:transition'
   CLICK: 'reflinks:click'
   SUBMIT: 'reflinks:submit'
+  REDIRECT: 'reflinks:redirect'
   STARTED: 'reflinks:started'
 
 # Event aliases that trigger other events in the application.
@@ -179,8 +180,10 @@ EVENT_ALIASES[EVENTS.RESTORE] = [EVENTS.TRANSITION]
 rollbackAfterLoad = []
 
 # Visits the specified url.
-Reflinks.visit = (href, method = 'GET', ors) ->
+Reflinks.visit = (href, method = 'GET', target) ->
   url = new Url(href).fullWithoutHash()
+  if target
+    ors = onRequestTargetSuccess.bind(null, target)
   if isLocationCached(url) and !ors
     # restoreFromCache returns the cache reference or null if nothing was found
     cache = restoreFromCache(method, url)
@@ -323,7 +326,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
     # If there was already a cache, just update currentCacheRef
     # and make sure documentRoot points to the correct DOM element.
     currentCacheRef = previousCache
-    currentCacheRef.once = once
+    currentCacheRef.once = if currentCacheRef.once is true then true else once
     currentCacheRef.documentRoot = documentRoot
     currentCacheRef.cachedAt = new Date().getTime()
   else
@@ -351,13 +354,25 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
       once: once
 
 # Removes the documentRoot of the cache and deletes the entry in the
+# cacheRef object searching for the location inside of the cache.
+clearLocationCache = Reflinks.clearLocationCache = (url) ->
+  _cache = getLocationCache(url)
+  if _cache
+    _cache.documentRoot.remove()
+    for key, __cache of cacheReferences
+      if __cache == _cache
+        delete cacheReferences[key]
+        return
+
+# Removes the documentRoot of the cache and deletes the entry in the
 # cacheRef object.
 clearCache = Reflinks.clearCache = (key) ->
-  console.log(cacheReferences)
   cacheRef = cacheReferences[key]
-  cacheRef.documentRoot.remove()
-  delete cacheReferences[key]
-
+  if cacheRef
+    cacheRef.documentRoot.remove()
+    delete cacheReferences[key]
+    true
+  false
 
 # Caches the current page with the 'once' flag to true. The once flag
 # indicates to Reflinks if a new request must be made to the server to retreive
@@ -415,7 +430,6 @@ documentRoot = document.body
 # This function is called when the page finishes loading.
 findDocumentRootInPage = ->
   customRoot = document.querySelector('*[data-reflinks-root]')
-  console.log("findDocumentRoot")
   documentRoot = customRoot or document.body
 
 # Returns the document root for the specified elements. This function, different
@@ -597,12 +611,7 @@ handleAnchorNavigation = (elm, ev) ->
   return 'user stoped request' if ev.defaultPrevented
   maybeUpdateProcessingFeedback(elm)
   target = elm.getAttribute('data-reflinks-target')
-  if target
-    console.log("there is a target")
-    Reflinks.visit(href, method, onRequestTargetSuccess.bind(null, target))
-  else
-    console.log("no target")
-    Reflinks.visit(href, method)
+  Reflinks.visit(href, method, target)
 
 # Serializes the specified object to the query string format
 serializeToQueryString = (obj) ->
@@ -684,16 +693,16 @@ insertRootContents = (nodes) ->
 # Restores the page for the specified location. If the cache is flagged as
 # 'once' a new request isn't made to the server.
 restoreFromCache = (method, location, skipPushHistory) ->
-  cache = getLocationCache location
-  unless cache
+  _cache = getLocationCache(location)
+  unless _cache
     return asyncRequest(method, location)
-  triggerEvent EVENTS.BEFORE_UNLOAD, {method, location}
-  restoreCache(cache)
+  triggerEvent(EVENTS.BEFORE_UNLOAD, {method, location})
+  restoreCache(_cache)
   storeCurrentLocationUrl()
-  restorePageScroll(cache.scroll) if cache.scroll
+  restorePageScroll(_cache.scroll) if _cache.scroll
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
   triggerEvent EVENTS.RESTORE, {method, location}
-  cache
+  _cache
 
 # Hides the current documentRoot and shows the element stored in the specified
 # cache.
@@ -732,6 +741,8 @@ onRedirectSuccess = (xhr) ->
   desiredMethod = xhr.getResponseHeader('Method') or 'GET'
   currentUrl = new Url(document.location)
   desiredUrl = new Url(desiredLocation)
+  ev = triggerEvent EVENTS.REDIRECT, {location: desiredLocation, method: desiredMethod, xhr}
+  return 'user just prevented...' if ev.defaultPrevented
   if currentUrl.isSameDomain(desiredUrl)
     Reflinks.visit(desiredUrl.full())
   else
