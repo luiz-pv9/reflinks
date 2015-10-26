@@ -765,7 +765,6 @@ onRequestTargetSuccess = (target, content, url) ->
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
 
-
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
   Reflinks.xhr = null
