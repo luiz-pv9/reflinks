@@ -112,6 +112,8 @@ csrfToken = ''
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
 
+Reflinks.printCsrfToken = -> console.log(csrfToken)
+
 # Name of the attribute that the CSRF token will be assigned to when sending to
 # the server. 'authenticity_token' is the name used by Rails.
 Reflinks.csrfTokenAttribute = 'authenticity_token'
@@ -867,8 +869,10 @@ escapeRegExp = (str) ->
 # Returns the content of the csrf meta tag in the HTML body
 getCsrfToken = (html) ->
   regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.csrfMetaTagName) +
-    '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/>')
+    '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/?>')
   matches = regexp.exec(html)
+  console.log("raw html", html)
+  console.log("csrf-token??", matches, matches && matches[1])
   if matches and matches[1] then matches[1] else ""
 
 # This function returns the scroll offset of the current page
