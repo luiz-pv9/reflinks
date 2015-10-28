@@ -367,7 +367,6 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
       documentRoot: documentRoot
       cachedAt: new Date().getTime()
       once: once
-  console.log(cacheReferences)
 
 # Removes the documentRoot of the cache and deletes the entry in the
 # cacheRef object searching for the location inside of the cache.
@@ -582,6 +581,9 @@ document.addEventListener('submit', (ev) ->
   url = form.attributes['action'].value
   ev = triggerEvent(EVENTS.SUBMIT, {target: form, url: new Url(url).fullWithoutHash(), method, serialized})
   return 'user stopped...' if ev.defaultPrevented
+  if form.hasAttribute('id')
+    ev = triggerEvent(EVENTS.SUBMIT + ':' + form.id, {target: form, url: new Url(url).fullWithoutHash(), method, serialized})
+    return 'user stopped...' if ev.defaultPrevented
   currentCacheRef?.scroll = currentPageScroll()
   asyncRequest(method, url, serialized)
 )
@@ -636,6 +638,9 @@ handleAnchorNavigation = (elm, ev) ->
   ev.preventDefault()
   ev = triggerEvent EVENTS.CLICK, {target: elm, href, method}
   return 'user stoped request' if ev.defaultPrevented
+  if elm.hasAttribute('id')
+    ev = triggerEvent EVENTS.CLICK + ':' + elm.id, {target: elm, href, method}
+  return 'user stoped request in id event' if ev.defaultPrevented
   maybeUpdateProcessingFeedback(elm)
   target = elm.getAttribute('data-reflinks-target')
   Reflinks.visit(href, method, target, elm)
@@ -775,7 +780,6 @@ onRedirectSuccess = (xhr) ->
   ev = triggerEvent EVENTS.REDIRECT, {location: desiredLocation, method: desiredMethod, xhr}
   return 'user just prevented...' if ev.defaultPrevented
   if currentUrl.isSameDomain(desiredUrl)
-    console.log("Reflinks.visit...", desiredUrl.full())
     Reflinks.visit(desiredUrl.full(), desiredMethod, null, null, true)
   else
     document.location.href = desiredUrl.full()
@@ -788,7 +792,6 @@ onRequestTargetSuccess = (target, elm, content, url) ->
   csrfToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
   customRootNode = findTargetOrDocumentRoot(target, rootNodes)
-  console.log("customRootNode", customRootNode)
   rootNodes = customRootNode.childNodes if customRootNode
   targetElm = document.getElementById(target)
   return console.warn("couldn't find target with id: " + target) unless targetElm
@@ -847,7 +850,6 @@ onRefreshSuccess = (content, url) ->
 onRequestFailure = (content, href) ->
   Reflinks.xhr = null
   # Just normaly visit the page
-  console.log(content)
   document.location.href = href
 
 # Returns the title of the specified HTML. The HTML should be a string and not
@@ -871,8 +873,6 @@ getCsrfToken = (html) ->
   regexp = new RegExp('<meta[\\s\\S]*?name\\=\\"' + escapeRegExp(Reflinks.csrfMetaTagName) +
     '\\"[\\s\\S]*?content\\=\\"([^\\"]*?)\\"[\\s\\S]*?\\/?>')
   matches = regexp.exec(html)
-  console.log("raw html", html)
-  console.log("csrf-token??", matches, matches && matches[1])
   if matches and matches[1] then matches[1] else ""
 
 # This function returns the scroll offset of the current page
