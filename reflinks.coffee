@@ -80,10 +80,7 @@ class Url
   # are considered the same if protocol, domain, path and query are the same.
   # (Yes, the hash part is ignored.)
   isSame: (url) ->
-    @protocol is url.protocol and
-    @domain is url.domain and
-    @path is url.path and
-    @query is url.query
+    return @fullWithoutHash() is url.fullWithoutHash()
 
   # Returns true if this url and the specified one have the same path (and domain).
   isSamePath: (url) ->
@@ -166,6 +163,7 @@ EVENTS =
   CLICK: 'reflinks:click'
   SUBMIT: 'reflinks:submit'
   REDIRECT: 'reflinks:redirect'
+  TARGET_LOAD: 'reflinks:target-load'
   STARTED: 'reflinks:started'
 
 # Event aliases that trigger other events in the application.
@@ -180,26 +178,37 @@ EVENT_ALIASES[EVENTS.RESTORE] = [EVENTS.TRANSITION]
 rollbackAfterLoad = []
 
 # Visits the specified url.
-Reflinks.visit = (href, method = 'GET', target) ->
+Reflinks.visit = (href, method = 'GET', target, elm, forceRefresh) ->
   url = new Url(href).fullWithoutHash()
   if target
-    ors = onRequestTargetSuccess.bind(null, target)
+    ors = onRequestTargetSuccess.bind(null, target, elm)
   if isLocationCached(url) and !ors
     # restoreFromCache returns the cache reference or null if nothing was found
     cache = restoreFromCache(method, url)
     # After restoring the cache to improve the user experience a new
     # request is issued to grab the updated version of the page
     if cache
-      refreshCurrentPage(method, url, cache) unless cache.once
+      if forceRefresh or not cache.once
+        refreshCurrentPage(method, url, cache)
   else
     asyncRequest(method, href, undefined, undefined, ors)
 
 # Stores in the cache the latest n visited pages in the website.
-Reflinks.cacheLatest = ->
+Reflinks.cacheLatest = (config = {except: []}, once = false) ->
   # Caches the current page when it finishes loading
-  window.addEventListener 'load', -> Reflinks.cache()
+  maybeCache = ->
+    for url in config.except
+      url = new Url(url)
+      return 'ignore this..' if url.isSame(currentLocationUrl)
+    Reflinks.cache(undefined, once)
+
+  window.addEventListener('load', maybeCache)
   # Cache every other page when the page loads
-  document.addEventListener EVENTS.LOAD, -> Reflinks.cache()
+  document.addEventListener(EVENTS.LOAD, maybeCache)
+
+# Stores in the cache the latest n visited pages in the website caching once (the pages
+# are not updated after visiting).
+Reflinks.cacheLatestOnce = (config) -> Reflinks.cacheLatest(config, true)
 
 # Store all navigation callbacks specified by the user using the 'Reflinks.when'
 # method.
@@ -317,6 +326,10 @@ triggerEvent = (eventName, data) ->
 updateTitle = (title) ->
   document.title = title
 
+# Caches the specified target inside the currentCacheRef object. This cache will be
+# used when popstate is fired.
+cacheTarget = (target) ->
+
 # Caches the current page associated with the specified name.
 cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
   key = if typeof name is 'string' then name else name.fullWithoutHash()
@@ -352,6 +365,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
       documentRoot: documentRoot
       cachedAt: new Date().getTime()
       once: once
+  console.log(cacheReferences)
 
 # Removes the documentRoot of the cache and deletes the entry in the
 # cacheRef object searching for the location inside of the cache.
@@ -432,11 +446,22 @@ findDocumentRootInPage = ->
   customRoot = document.querySelector('*[data-reflinks-root]')
   documentRoot = customRoot or document.body
 
+# Returns the element that is considered the root. If the target is found, it is returned.
+# If no target is found, the document root is returned.
+findTargetOrDocumentRoot = (target, elements) ->
+  for element in elements
+    if element.hasAttribute and element.hasAttribute('data-reflinks-view') and element.getAttribute('data-reflinks-view') is target
+      return element
+    docRoot = element.querySelector and element.querySelector('*[data-reflinks-view="'+target+'"]')
+    return docRoot if docRoot
+  return findDocumentRoot(elements)
+
+
 # Returns the document root for the specified elements. This function, different
 # from findDocumentRootInPage, searches for the document root 
 findDocumentRoot = (elements) ->
   for element in elements
-    if element.getAttribute and element.getAttribute('data-reflinks-root')
+    if element.hasAttribute and element.hasAttribute('data-reflinks-root')
       return element
     docRoot = element.querySelector and element.querySelector('*[data-reflinks-root]')
     return docRoot if docRoot
@@ -550,10 +575,10 @@ document.addEventListener('submit', (ev) ->
   method = 'POST'
   if serialized['_method']
     method = serialized['_method']
-  if form.getAttribute('data-reflinks-method')
+  if form.hasAttribute('data-reflinks-method')
     method = form.getAttribute('data-reflinks-method')
   url = form.attributes['action'].value
-  ev = triggerEvent(EVENTS.SUBMIT, {target: form, url: new Url(url).fullWithoutHash(), method})
+  ev = triggerEvent(EVENTS.SUBMIT, {target: form, url: new Url(url).fullWithoutHash(), method, serialized})
   return 'user stopped...' if ev.defaultPrevented
   currentCacheRef?.scroll = currentPageScroll()
   asyncRequest(method, url, serialized)
@@ -611,7 +636,7 @@ handleAnchorNavigation = (elm, ev) ->
   return 'user stoped request' if ev.defaultPrevented
   maybeUpdateProcessingFeedback(elm)
   target = elm.getAttribute('data-reflinks-target')
-  Reflinks.visit(href, method, target)
+  Reflinks.visit(href, method, target, elm)
 
 # Serializes the specified object to the query string format
 serializeToQueryString = (obj) ->
@@ -633,7 +658,7 @@ addcsrfTokenToUrl = (url) ->
 
 # Performs an AJAX request to the specified url. The request is then handleded
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
-asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure) ->
+asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure, headers = {}) ->
   method = method.toUpperCase()
   Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
@@ -641,6 +666,9 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
   xhr.setRequestHeader 'X-CSRF-TOKEN', csrfToken
+  xhr.setRequestHeader 'X-REFLINKS', 'true'
+  for header, value of headers
+    xhr.setRequestHeader(header, value)
   xhrTimeout = setTimeout(->
     triggerEvent EVENTS.TIMEOUT, {xhr, method, url, data}
   , Reflinks.xhrTimeout)
@@ -656,7 +684,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
         orf(xhr.responseText, url)
   # I can't think of a reason why not to include cookies.
   xhr.withCredentials = true
-  triggerEvent EVENTS.BEFORE_REQUEST, {method, url, data}
+  triggerEvent EVENTS.BEFORE_REQUEST, {method, url, data, xhr}
   if method isnt 'GET' and csrfToken
     data = data or {}
     data[Reflinks.csrfTokenAttribute] = csrfToken
@@ -737,6 +765,7 @@ updateCacheAndTransitionTo = (url, rootNodes) ->
 onRedirectSuccess = (xhr) ->
   Reflinks.xhr = null
   desiredLocation = xhr.getResponseHeader('Location')
+  desiredMethod = xhr.getResponseHeader('Method') or 'GET'
   return console.error("'Location' header not found") unless desiredLocation
   desiredMethod = xhr.getResponseHeader('Method') or 'GET'
   currentUrl = new Url(document.location)
@@ -744,26 +773,33 @@ onRedirectSuccess = (xhr) ->
   ev = triggerEvent EVENTS.REDIRECT, {location: desiredLocation, method: desiredMethod, xhr}
   return 'user just prevented...' if ev.defaultPrevented
   if currentUrl.isSameDomain(desiredUrl)
-    Reflinks.visit(desiredUrl.full())
+    console.log("Reflinks.visit...", desiredUrl.full())
+    Reflinks.visit(desiredUrl.full(), desiredMethod, null, null, true)
   else
     document.location.href = desiredUrl.full()
 
 # This method is called when the response of a request that is intended
 # to be inserted in the specified target
-onRequestTargetSuccess = (target, content, url) ->
+onRequestTargetSuccess = (target, elm, content, url) ->
   Reflinks.xhr = null
   ProgressBar.done()
   csrfToken = getCsrfToken(content)
   rootNodes = toElements(getBody(content))
-  customRootNode = findDocumentRoot(rootNodes)
+  customRootNode = findTargetOrDocumentRoot(target, rootNodes)
+  console.log("customRootNode", customRootNode)
   rootNodes = customRootNode.childNodes if customRootNode
   targetElm = document.getElementById(target)
+  return console.warn("couldn't find target with id: " + target) unless targetElm
   while targetElm.firstChild
     targetElm.removeChild(targetElm.firstChild)
   nodesToAdd = []
   for node in rootNodes
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
+  triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm}
+  unless elm.hasAttribute('data-reflinks-keep-state')
+    cacheTarget(target)
+    window.history.pushState({reflinks: true, href: document.location.href, target: target}, "", url)
 
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
@@ -809,6 +845,7 @@ onRefreshSuccess = (content, url) ->
 onRequestFailure = (content, href) ->
   Reflinks.xhr = null
   # Just normaly visit the page
+  console.log(content)
   document.location.href = href
 
 # Returns the title of the specified HTML. The HTML should be a string and not
