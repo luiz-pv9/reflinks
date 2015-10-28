@@ -564,6 +564,26 @@ document.addEventListener('click', (ev) ->
     handleAnchorNavigation(anchorParent, ev)
 )
 
+# Insertes in the serialized object the element value.
+serializeInput = (data, elm) ->
+  if elm.type is 'text' or elm.type is 'submit' or elm.type is 'textarea'
+    data[elm.name] = elm.value
+  if elm.type is 'checkbox'
+    checkboxes = document.getElementsByName(elm.name)
+    if checkboxes.length is 1 and elm.checked
+      data[elm.name] = 'on'
+    else if checkboxes.length > 1
+      values = []
+      for checkbox in checkboxes
+        values.push(checkbox.value) if checkbox.checked
+      data[elm.name] = values
+  if elm.type is 'radio'
+    radios = document.getElementsByName(elm.name)
+    for radio in radios
+      if radio.checked
+        data[elm.name] = radio.value
+        break
+
 # Intercepts all form submissions on the page.
 document.addEventListener('submit', (ev) ->
   return if shouldIgnoreElement(ev.target)
@@ -572,7 +592,7 @@ document.addEventListener('submit', (ev) ->
   serialized = {}
   for element in form.elements
     maybeUpdateProcessingFeedback(element)
-    serialized[element.name] = element.value
+    serializeInput(serialized, element)
   method = 'POST'
   if serialized['_method']
     method = serialized['_method']
@@ -646,11 +666,16 @@ handleAnchorNavigation = (elm, ev) ->
   Reflinks.visit(href, method, target, elm)
 
 # Serializes the specified object to the query string format
-serializeToQueryString = (obj) ->
+serializeToQueryString = (obj, prefix = '', sufix = '') ->
   str = []
-  for p of obj
-    if obj.hasOwnProperty(p)
-      str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]))
+  for attr of obj
+    if obj.hasOwnProperty(attr)
+      value = obj[attr]
+      if 'string' is typeof value or 'number' is typeof value or value is true or value is false
+        str.push(prefix + attr  + sufix + '=' + value)
+      if Object.prototype.toString.call(value) is '[object Array]'
+        for val in value
+          str.push(prefix + attr + sufix + '[]=' + val)
   return str.join "&"
 
 # Appends the csrf token parameter to the url and returns the modified

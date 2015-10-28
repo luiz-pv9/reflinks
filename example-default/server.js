@@ -17,7 +17,7 @@ app.use(express.static(__dirname + '/../build'));
 app.use(express.static(__dirname + '/assets'));
 
 // Parsing the body of the request in POST requests
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // Counter used to generate unique ids for items.
 var latestId = 0;
@@ -52,6 +52,7 @@ app.get('/items/:id/edit', function(req, res) {
 });
 
 app.post('/items', function(req, res) {
+  console.log("req.body", req.body);
   var label = req.body.label;
   var item = {
     id: ++latestId,

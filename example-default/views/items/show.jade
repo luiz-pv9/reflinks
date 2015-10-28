@@ -5,5 +5,12 @@ block content
   .item-content
     b Label: 
     span= item.label
+
+    .item-done
+      if item.done
+        b DONE!
+      else
+        b not done...
+
   a(class="btn btn-primary", href="/items/" + item.id + "/edit", data-processing-feedback="Loading...") Edit
   a(class="btn btn-default", href="/items") Go back
