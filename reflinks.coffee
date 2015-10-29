@@ -675,7 +675,7 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
         str.push(prefix + attr  + sufix + '=' + value)
       if Object.prototype.toString.call(value) is '[object Array]'
         for val in value
-          str.push(prefix + attr + sufix + '[]=' + val)
+          str.push(prefix + attr + sufix + '=' + val)
   return str.join "&"
 
 # Appends the csrf token parameter to the url and returns the modified
@@ -875,7 +875,9 @@ onRefreshSuccess = (content, url) ->
 onRequestFailure = (content, href) ->
   Reflinks.xhr = null
   # Just normaly visit the page
-  document.location.href = href
+  document.open()
+  document.write(content)
+  document.close()
 
 # Returns the title of the specified HTML. The HTML should be a string and not
 # a DOM element.
