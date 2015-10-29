@@ -26,11 +26,11 @@ Object.keys(plugins).forEach(function(pluginName) {
   var coffeeTask = 'coffee-' + pluginName;
   var minifyTask = 'minify-' + pluginName;
   gulp.task(coffeeTask, function() {
-    return gulp.src(plugin.files)
+    var stream = gulp.src(plugin.files)
       .pipe(concat(compiledFile))
       .pipe(coffee({bare: false}))
-      .on('error', gutil.log)
       .pipe(gulp.dest('./build'));
+    return stream;
   });
 
   gulp.task(minifyTask, ['coffee-' + pluginName], function() {
