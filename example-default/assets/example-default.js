@@ -1,3 +1,7 @@
+Reflinks.format('important', function(val) {
+  return val.toUpperCase();
+});
+
 document.addEventListener('reflinks:submit:create-item', function(ev) {
   console.log("CREATING AN ITEM...");
 });

@@ -11,12 +11,8 @@ var defaultFiles = ['reflinks.coffee'];
 
 var plugins = {
   'default': {
-    files: defaultFiles,
+    files: defaultFiles.concat(['addons/reflinks-format.coffee']),
     build: 'reflinks.min.js'
-  },
-  'angular': {
-    files: defaultFiles.concat(['reflinks-angular.coffee']),
-    build: 'reflinks-angular.min.js'
   }
 };
 
