@@ -624,9 +624,9 @@ document.addEventListener('submit', (ev) ->
 #  * it specifies 'data-no-reflinks' attribute
 #  * any of it's parents specifies 'data-no-reflinks' attribute.
 shouldIgnoreElement = (elm) ->
-  return true if elm.getAttribute 'data-no-reflinks'
+  return true if elm.hasAttribute 'data-no-reflinks'
   while elm.parentNode
-    return true if elm.getAttribute 'data-no-reflinks'
+    return true if elm.hasAttribute 'data-no-reflinks'
     elm = elm.parentNode
   false
 
@@ -661,6 +661,7 @@ maybeUpdateProcessingFeedback = (elm) ->
 
 # Callback called when the user clicks an anchor element in the page
 handleAnchorNavigation = (elm, ev) ->
+  console.log("should I ignore elm?", elm)
   return if shouldIgnoreElement(elm)
   method = elm.getAttribute('data-method') or 'GET'
   return 'no href attr' unless elm.getAttribute('href')
