@@ -2,9 +2,13 @@ extends ../index
 include ./form
 
 block content
-  +item_form("POST", "/items", undefined, 'create-item')
-  h2 List of items
-  ul.items.list-group
-    each item in items
-      li.item.list-group-item
-        a(href="/items/" + item.id)= item.label
+  .row
+    .col-md-4
+      +item_form("POST", "/items", undefined, 'create-item')
+      h2 List of items
+      ul.items.list-group
+        each item in items
+          li.item.list-group-item
+            a(href="/items/" + item.id, data-reflinks-target="item-view")= item.label
+    .col-md-8
+      #item-view

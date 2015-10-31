@@ -109,6 +109,7 @@ class Url
 # CSRF token used by many frameworks. This value is passed along all requests.
 csrfToken = ''
 
+
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
 
@@ -120,6 +121,9 @@ Reflinks.csrfTokenAttribute = 'authenticity_token'
 
 # Name of the <meta> tag that contains the csrf token
 Reflinks.csrfMetaTagName = 'csrf-token'
+
+# Flag that indicates that Reflinks is ready to function properly.
+Reflinks.started = false
 
 # Showing the progress bar for fast requests makes the application seem
 # slower. The 'progressBarDelay' variable specifies the amount of time
@@ -184,6 +188,7 @@ Reflinks.visit = (href, method = 'GET', target, elm, forceRefresh) ->
   url = new Url(href).fullWithoutHash()
   if target
     ors = onRequestTargetSuccess.bind(null, target, elm)
+
   if isLocationCached(url) and !ors
     # restoreFromCache returns the cache reference or null if nothing was found
     cache = restoreFromCache(method, url)
@@ -282,7 +287,7 @@ document.addEventListener(EVENTS.BEFORE_UNLOAD, storeCurrentPageScroll)
 
 # The callbacks should be fired when the page loads the first time.
 # The object passed to 'callNavigationCallbacks'
-window.addEventListener('load', -> callNavigationCallbacks({data: {url: document.location.href}}))
+document.addEventListener(EVENTS.STARTED, -> callNavigationCallbacks({data: {url: document.location.href}}))
 
 # Prints to the console everytime a page transitions happens. This is
 # only useful for debugging issues.
@@ -334,6 +339,10 @@ cacheTarget = (target) ->
 
 # Caches the current page associated with the specified name.
 cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
+  unless Reflinks.started
+    return console.error("Reflinks can't cache the specified page because it is not \
+      fully started yet. Please call the cache method after the event 'reflinks:started' \
+      is emitted.")
   key = if typeof name is 'string' then name else name.fullWithoutHash()
   location = new Url(document.location)
   previousCache = getLocationCache(location.fullWithoutHash())
@@ -529,6 +538,8 @@ window.addEventListener('load', ->
       csrfToken = meta.getAttribute('content')
       break
 
+  # Update the flag...
+  Reflinks.started = true
   triggerEvent EVENTS.STARTED
 )
 
@@ -767,7 +778,10 @@ restoreFromCache = (method, location, skipPushHistory) ->
 # Hides the current documentRoot and shows the element stored in the specified
 # cache.
 restoreCache = (cache) ->
-  documentRoot.style.display = 'none'
+  if isCurrentPageCached()
+    documentRoot.style.display = 'none'
+  else
+    documentRoot.remove()
   documentRoot = cache.documentRoot
   documentRoot.style.display = 'block'
 

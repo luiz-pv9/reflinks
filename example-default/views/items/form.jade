@@ -1,39 +1,9 @@
 mixin item_form(method, action, item, id)
   - item = item || {label: ""}
-  form.item-form(method="POST", action=action, id=id, data-reflinks-method=method)
+  form.item-form(method=method, action=action, id=id, data-reflinks-method=method)
     .form-group
       label(for="label") Label
       input(id="label", name="label", type="text", class="form-control", value="#{item.label}", data-processing-disable="1", autofocus="true")
-
-    .form-group
-      label(for="done") Done
-      input(name="done", type="checkbox", data-processing-disable)
-
-    .form-group
-      label(for="size") Size
-      b Large
-      input(name="size", type="checkbox", value="Large", data-processing-disable)
-      b Medium
-      input(name="size", type="checkbox", value="Medium", data-processing-disable)
-      b Small
-      input(name="size", type="checkbox", value="Small", data-processing-disable)
-
-    .form-group
-      label(for="color") Color
-      b Red
-      input(name="color", type="radio", value="Red", data-processing-disable)
-      b Green
-      input(name="color", type="radio", value="Green", data-processing-disable)
-      b Blue
-      input(name="color", type="radio", value="Blue", data-processing-disable)
-
-    .form-group
-      label(for="color") Admin permission
-      input(name="admin[permission]", type="checkbox", data-processing-disable)
-
-    .form-group
-      label(for="message") Message
-      textarea(name="message", data-format="important")
 
     .form-group
       input(id="submit", name="submit", type="submit", value="Submit", class="btn btn-primary", data-processing-feedback="Processing...")
