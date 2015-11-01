@@ -577,7 +577,7 @@ document.addEventListener('click', (ev) ->
 
 # Insertes in the serialized object the element value.
 serializeInput = (data, elm) ->
-  if elm.type is 'text' or elm.type is 'submit' or elm.type is 'textarea'
+  if ['text', 'password', 'submit', 'textarea', 'email'].indexOf(elm.type) isnt -1
     data[elm.name] = elm.value
   if elm.type is 'checkbox'
     checkboxes = document.getElementsByName(elm.name)
@@ -661,7 +661,6 @@ maybeUpdateProcessingFeedback = (elm) ->
 
 # Callback called when the user clicks an anchor element in the page
 handleAnchorNavigation = (elm, ev) ->
-  console.log("should I ignore elm?", elm)
   return if shouldIgnoreElement(elm)
   method = elm.getAttribute('data-method') or 'GET'
   return 'no href attr' unless elm.getAttribute('href')
