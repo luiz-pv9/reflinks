@@ -353,6 +353,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
     currentCacheRef.once = if currentCacheRef.once is true then true else once
     currentCacheRef.documentRoot = documentRoot
     currentCacheRef.cachedAt = new Date().getTime()
+    currentCacheRef.title = document.title
   else
     currentCacheSize = Object.keys(cacheReferences).length
 
@@ -375,6 +376,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
       location: location
       documentRoot: documentRoot
       cachedAt: new Date().getTime()
+      title: document.title
       once: once
 
 # Removes the documentRoot of the cache and deletes the entry in the
@@ -771,8 +773,9 @@ restoreFromCache = (method, location, skipPushHistory) ->
   restoreCache(_cache)
   storeCurrentLocationUrl()
   restorePageScroll(_cache.scroll) if _cache.scroll
+  updateTitle(_cache.title)
   window.history.pushState({reflinks: true}, "", location) unless skipPushHistory
-  triggerEvent EVENTS.RESTORE, {method, location}
+  triggerEvent EVENTS.RESTORE, {method, location, title: _cache.title}
   _cache
 
 # Hides the current documentRoot and shows the element stored in the specified
