@@ -109,7 +109,6 @@ class Url
 # CSRF token used by many frameworks. This value is passed along all requests.
 csrfToken = ''
 
-
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
 
@@ -206,12 +205,24 @@ Reflinks.cacheLatest = (config = {except: []}, once = false) ->
   maybeCache = ->
     for url in config.except
       url = new Url(url)
-      return 'ignore this..' if url.isSame(currentLocationUrl)
+      return 'ignore this..' if url.matches(currentLocationUrl)
     Reflinks.cache(undefined, once)
 
   window.addEventListener('load', maybeCache)
   # Cache every other page when the page loads
   document.addEventListener(EVENTS.LOAD, maybeCache)
+
+# Updates the property 'once' to false for the cache associated with the specified
+# href. This forces a refresh the next time the user visits the page. The property
+# is then set back to true and the page is cached persistent.
+Reflinks.flashCache = (href) ->
+  _cache = getLocationCache(href)
+  if _cache
+    _cache.once = false
+    onceHandler = (ev) ->
+      _cache.once = true
+      Reflinks.clearNavigation(href, onceHandler)
+    Reflinks.when(href, onceHandler)
 
 # Stores in the cache the latest n visited pages in the website caching once (the pages
 # are not updated after visiting).
@@ -389,6 +400,11 @@ clearLocationCache = Reflinks.clearLocationCache = (url) ->
       if __cache == _cache
         delete cacheReferences[key]
         return
+
+# Removes the documentRoot of the cache and deletes the entry in the
+# cacheRef object searching for current location.
+clearCurrentLocationCache = Reflinks.clearCurrentLocationCache = ->
+  clearLocationCache(currentLocationUrl.fullWithoutHash())
 
 # Removes the documentRoot of the cache and deletes the entry in the
 # cacheRef object.
@@ -609,8 +625,8 @@ document.addEventListener('submit', (ev) ->
   method = 'POST'
   if serialized['_method']
     method = serialized['_method']
-  if form.hasAttribute('data-reflinks-method')
-    method = form.getAttribute('data-reflinks-method')
+  if form.hasAttribute('data-method')
+    method = form.getAttribute('data-method')
   url = form.attributes['action'].value
   ev = triggerEvent(EVENTS.SUBMIT, {target: form, url: new Url(url).fullWithoutHash(), method, serialized})
   return 'user stopped...' if ev.defaultPrevented
