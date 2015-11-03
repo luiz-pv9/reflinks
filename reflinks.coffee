@@ -766,7 +766,10 @@ insertRootContents = (nodes) ->
   clonedRoot = documentRoot.cloneNode(false, true)
   clonedRoot.appendChild(node.cloneNode(true, true)) for node in nodes
   clonedRoot.style.display = 'block' # In case the cached node was hidden
-  documentRoot.parentNode.appendChild(clonedRoot) # Append the new one
+  if(documentRoot.nextSibling)
+    documentRoot.parentNode.insertBefore(clonedRoot, documentRoot.nextSibling)
+  else
+    documentRoot.parentNode.appendChild(clonedRoot) # Append the new one
   documentRoot = clonedRoot
 
 # Restores the page for the specified location. If the cache is flagged as
