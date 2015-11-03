@@ -707,16 +707,6 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
           str.push(prefix + attr + sufix + '=' + val)
   return str.join "&"
 
-# Appends the csrf token parameter to the url and returns the modified
-# url string.
-addcsrfTokenToUrl = (url) ->
-  url = new Url(url)
-  # adds a possible ?csrf_token=... to the URL.
-  if csrfToken and csrfToken isnt ''
-    url.setQueryParam(Reflinks.csrfTokenAttribute, csrfToken)
-  return url.fullWithoutHash()
-
-
 # Performs an AJAX request to the specified url. The request is then handleded
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure, headers = {}) ->
