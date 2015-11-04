@@ -122,6 +122,9 @@ Reflinks = @Reflinks = {}
 # Just for debugging.
 Reflinks.printCsrfToken = -> console.log(csrfToken)
 
+# Returns the current csrfToken value. Useful for ajax requests.
+Reflinks.csrfTokenValue = -> csrfToken
+
 # Name of the attribute that the CSRF token will be assigned to when sending to
 # the server. 'authenticity_token' is the name used by Rails.
 Reflinks.csrfTokenAttribute = 'authenticity_token'
