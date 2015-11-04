@@ -76,6 +76,13 @@ class Url
     else
       @query = '?' + key + '=' + value
 
+  # Used by asyncRequest when setting form GET params in the URL
+  setQueryParams: (params) ->
+    if @query.indexOf('?') is 0
+      @query += params
+    else
+      @query = '?' + params
+
   # Returns true if this url and the specified one are the same. The URLs
   # are considered the same if protocol, domain, path and query are the same.
   # (Yes, the hash part is ignored.)
@@ -112,6 +119,7 @@ csrfToken = ''
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
 
+# Just for debugging.
 Reflinks.printCsrfToken = -> console.log(csrfToken)
 
 # Name of the attribute that the CSRF token will be assigned to when sending to
@@ -634,7 +642,12 @@ document.addEventListener('submit', (ev) ->
     ev = triggerEvent(EVENTS.SUBMIT + ':' + form.id, {target: form, url: new Url(url).fullWithoutHash(), method, serialized})
     return 'user stopped...' if ev.defaultPrevented
   currentCacheRef?.scroll = currentPageScroll()
-  asyncRequest(method, url, serialized)
+  if form.hasAttribute 'data-target'
+    target = form.getAttribute 'data-target'
+    ors = onRequestTargetSuccess.bind(null, target, form)
+    asyncRequest(method, url, serialized, undefined, ors)
+  else
+    asyncRequest(method, url, serialized)
 )
 
 # Returns true if Reflinks should ignore the element. Reflinks
@@ -713,6 +726,17 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   method = method.toUpperCase()
   Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
+
+  queryString = ''
+  if data
+    queryString = serializeToQueryString(data)
+
+  # If the method is GET and there is some data, the data should be sent through the URL
+  if method is 'GET' and data
+    _url = new Url(url)
+    _url.setQueryParams(queryString)
+    url = _url.fullWithoutHash()
+
   xhr.open(method, url, true)
   xhr.setRequestHeader 'Accept', 'text/html, application/xhtml+xml, application/xml'
   xhr.setRequestHeader 'Content-type', 'application/x-www-form-urlencoded'
@@ -739,7 +763,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   if method isnt 'GET' and csrfToken
     data = data or {}
     data[Reflinks.csrfTokenAttribute] = csrfToken
-  xhr.send(if data then serializeToQueryString(data) else undefined)
+  xhr.send(queryString)
   ProgressBar.start()
 
 # Remove all child elements of the root content in the page that should not
@@ -853,7 +877,7 @@ onRequestTargetSuccess = (target, elm, content, url) ->
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
   triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm}
-  unless elm.hasAttribute('data-reflinks-keep-state')
+  unless elm and elm.hasAttribute('data-reflinks-keep-state')
     cacheTarget(target)
     window.history.pushState({reflinks: true, href: document.location.href, target: target}, "", url)
 
