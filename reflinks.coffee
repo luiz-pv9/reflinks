@@ -200,7 +200,7 @@ Reflinks.visit = (href, method = 'GET', target, elm, forceRefresh) ->
   if target
     ors = onRequestTargetSuccess.bind(null, target, elm)
 
-  if isLocationCached(url) and !ors
+  if method.toUpperCase() isnt 'DELETE' and isLocationCached(url) and !ors
     # restoreFromCache returns the cache reference or null if nothing was found
     cache = restoreFromCache(method, url)
     # After restoring the cache to improve the user experience a new
@@ -232,8 +232,10 @@ Reflinks.flashCache = (href) ->
   if _cache
     _cache.once = false
     onceHandler = (ev) ->
+      console.log("chamado do handler")
       _cache.once = true
       Reflinks.clearNavigation(href, onceHandler)
+    console.log("chamando o reflinks.when", href)
     Reflinks.when(href, onceHandler)
 
 # Stores in the cache the latest n visited pages in the website caching once (the pages
@@ -273,6 +275,7 @@ Reflinks.when = (url, callback, config = {}) ->
   nc = findOrCreateNavigationCallback(url)
   nc.callbacks = nc.callbacks or []
   callback._config = config
+  console.log(nc.callbacks[0] == callback)
   nc.callbacks.push(callback)
 
 # Removes the navigation callback for the specified url.
@@ -280,8 +283,11 @@ Reflinks.when = (url, callback, config = {}) ->
 # are removed.
 Reflinks.clearNavigation = (url, callback) ->
   nc = findNavigationCallback(url)
-  return 'no navigation callback found' unless nc
+  unless nc
+    console.log('no navigation callback found')
+    return 'no navigation callback found'
   if callback
+    console.log('clearing callback')
     nc.callbacks.splice(nc.callbacks.indexOf(callback), 1)
   else
     nc.callbacks = []
@@ -289,16 +295,17 @@ Reflinks.clearNavigation = (url, callback) ->
 # This method is called every time the 'load' event is fired. It tries
 # to find callbacks for the specified event and calls them.
 callNavigationCallbacks = (ev) ->
-  navigationCallback = findNavigationCallback ev.data.url
+  navigationCallback = findNavigationCallback(ev.data.url)
   if navigationCallback
     for callback in navigationCallback.callbacks
+      console.log("callback", callback)
       latestMatchedParams = navigationCallback.url.latestMatchedParams
       callbackConfigPass = true
       for param of callback._config
         unless callback._config[param](latestMatchedParams[param])
           callbackConfigPass = false
           break
-      callback({ev, params: latestMatchedParams}) if callbackConfigPass
+      # callback({ev, params: latestMatchedParams}) if callbackConfigPass
 
 # Tries to store the current page scroll position in the cache (if it exists)
 # This method is called when the event BEFORE_UNLOAD is triggered.
@@ -665,6 +672,21 @@ shouldIgnoreElement = (elm) ->
     elm = elm.parentNode
   false
 
+# TODO: doc
+anyAncestorAttribute = (elm, attr) ->
+  return elm.getAttribute(attr) if elm?.hasAttribute(attr)
+  while elm?.parentNode
+    elm = elm.parentNode
+    return elm.getAttribute(attr) if elm?.hasAttribute and elm?.hasAttribute(attr)
+  null
+
+# TODO: doc
+anyAncestorHasAttribute = (elm, attr) ->
+  return true if elm?.hasAttribute(attr)
+  while elm?.parentNode
+    elm = elm.parentNode
+    return true if elm?.hasAttribute and elm.hasAttribute(attr)
+  false
 
 # Disable the specified element if the attribute 'data-processing-disable'
 # is present.
@@ -708,7 +730,7 @@ handleAnchorNavigation = (elm, ev) ->
     ev = triggerEvent EVENTS.CLICK + ':' + elm.id, {target: elm, href, method}
   return 'user stoped request in id event' if ev.defaultPrevented
   maybeUpdateProcessingFeedback(elm)
-  target = elm.getAttribute('data-reflinks-target')
+  target = anyAncestorAttribute(elm, 'data-target')
   Reflinks.visit(href, method, target, elm)
 
 # Serializes the specified object to the query string format
@@ -881,7 +903,7 @@ onRequestTargetSuccess = (target, elm, content, url) ->
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
   triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm}
-  unless elm and elm.hasAttribute('data-reflinks-keep-state')
+  unless anyAncestorHasAttribute(elm, 'data-reflinks-keep-state')
     cacheTarget(target)
     window.history.pushState({reflinks: true, href: document.location.href, target: target}, "", url)
 
