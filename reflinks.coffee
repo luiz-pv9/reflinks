@@ -121,6 +121,7 @@ Reflinks = @Reflinks = {}
 
 # Just for debugging.
 Reflinks.printCsrfToken = -> console.log(csrfToken)
+Reflinks.printCache = -> console.log(cacheReferences)
 
 # Returns the current csrfToken value. Useful for ajax requests.
 Reflinks.csrfTokenValue = -> csrfToken
