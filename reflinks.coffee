@@ -109,7 +109,7 @@ class Url
         @latestMatchedParams[part.replace(':', '')] = urlPart
     true
 
-  # Returns true if this url and the specified one are in the same domain 
+  # Returns true if this url and the specified one are in the same domain
   isSameDomain: (url) ->
     @domainOrCurrent() is url.domainOrCurrent()
 
@@ -232,10 +232,8 @@ Reflinks.flashCache = (href) ->
   if _cache
     _cache.once = false
     onceHandler = (ev) ->
-      console.log("chamado do handler")
       _cache.once = true
       Reflinks.clearNavigation(href, onceHandler)
-    console.log("chamando o reflinks.when", href)
     Reflinks.when(href, onceHandler)
 
 # Stores in the cache the latest n visited pages in the website caching once (the pages
@@ -275,7 +273,6 @@ Reflinks.when = (url, callback, config = {}) ->
   nc = findOrCreateNavigationCallback(url)
   nc.callbacks = nc.callbacks or []
   callback._config = config
-  console.log(nc.callbacks[0] == callback)
   nc.callbacks.push(callback)
 
 # Removes the navigation callback for the specified url.
@@ -284,10 +281,8 @@ Reflinks.when = (url, callback, config = {}) ->
 Reflinks.clearNavigation = (url, callback) ->
   nc = findNavigationCallback(url)
   unless nc
-    console.log('no navigation callback found')
     return 'no navigation callback found'
   if callback
-    console.log('clearing callback')
     nc.callbacks.splice(nc.callbacks.indexOf(callback), 1)
   else
     nc.callbacks = []
@@ -298,14 +293,13 @@ callNavigationCallbacks = (ev) ->
   navigationCallback = findNavigationCallback(ev.data.url)
   if navigationCallback
     for callback in navigationCallback.callbacks
-      console.log("callback", callback)
       latestMatchedParams = navigationCallback.url.latestMatchedParams
       callbackConfigPass = true
       for param of callback._config
         unless callback._config[param](latestMatchedParams[param])
           callbackConfigPass = false
           break
-      # callback({ev, params: latestMatchedParams}) if callbackConfigPass
+      callback({ev, params: latestMatchedParams}) if callbackConfigPass
 
 # Tries to store the current page scroll position in the cache (if it exists)
 # This method is called when the event BEFORE_UNLOAD is triggered.
@@ -505,7 +499,7 @@ findTargetOrDocumentRoot = (target, elements) ->
 
 
 # Returns the document root for the specified elements. This function, different
-# from findDocumentRootInPage, searches for the document root 
+# from findDocumentRootInPage, searches for the document root
 findDocumentRoot = (elements) ->
   for element in elements
     if element.hasAttribute and element.hasAttribute('data-reflinks-root')
@@ -631,6 +625,9 @@ serializeInput = (data, elm) ->
       if radio.checked
         data[elm.name] = radio.value
         break
+  if elm.type is 'select-one'
+    selected = elm.options[elm.selectedIndex].value
+    data[elm.name] = selected
 
 # Intercepts all form submissions on the page.
 document.addEventListener('submit', (ev) ->
@@ -641,6 +638,7 @@ document.addEventListener('submit', (ev) ->
   for element in form.elements
     maybeUpdateProcessingFeedback(element)
     serializeInput(serialized, element)
+  console.log("SERIALIZED FORM", serialized)
   method = 'POST'
   if serialized['_method']
     method = serialized['_method']
@@ -662,7 +660,7 @@ document.addEventListener('submit', (ev) ->
 )
 
 # Returns true if Reflinks should ignore the element. Reflinks
-# ignores elmenets when: 
+# ignores elmenets when:
 #  * it specifies 'data-no-reflinks' attribute
 #  * any of it's parents specifies 'data-no-reflinks' attribute.
 shouldIgnoreElement = (elm) ->
@@ -695,7 +693,7 @@ maybeUpdateDisableFeedback = (elm) ->
     elm.disabled = true
     rollbackAfterLoad.push(-> elm.disabled = false)
 
-# Updates the elm content to the same value as data-processing-feedback 
+# Updates the elm content to the same value as data-processing-feedback
 # attribute. This is useful for showing the user a visual feedback (besides the
 # progress bar) that the website is doing something. The 'maybe' in the name
 # is because the elm might not have a processing-feedback attribute.
@@ -853,7 +851,7 @@ restoreCache = (cache) ->
 refreshCurrentPage = (method, location, cache) ->
   asyncRequest(method, location, cache.data, true, onRefreshSuccess)
 
-# If the user is requesting a page that already exists in the cache (such as 
+# If the user is requesting a page that already exists in the cache (such as
 # a redirect from the server), the contents of the cache must be updated to
 # reflect the new data, instead of creating a new dom element.
 # This methods updates the existing cache with the specified rootNodes.
