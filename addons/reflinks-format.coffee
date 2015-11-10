@@ -9,8 +9,8 @@ Reflinks.format = (name, formatter) ->
 # checks for `data-format` attribute in every input element
 # in the form and updates the serialized object with new values.
 document.addEventListener(EVENTS.SUBMIT, (ev) ->
-  form = ev.data.target
-  data = ev.data.serialized
+  form = ev.detail.target
+  data = ev.detail.serialized
 
   requiresFormatting = form.querySelectorAll('*[data-format]')
   for node in requiresFormatting

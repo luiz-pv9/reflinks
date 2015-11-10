@@ -122,6 +122,7 @@ Reflinks = @Reflinks = {}
 # Just for debugging.
 Reflinks.printCsrfToken = -> console.log(csrfToken)
 Reflinks.printCache = -> console.log(cacheReferences)
+Reflinks.documentRoot = Reflinks.root = -> documentRoot
 
 # Returns the current csrfToken value. Useful for ajax requests.
 Reflinks.csrfTokenValue = -> csrfToken
@@ -290,7 +291,7 @@ Reflinks.clearNavigation = (url, callback) ->
 # This method is called every time the 'load' event is fired. It tries
 # to find callbacks for the specified event and calls them.
 callNavigationCallbacks = (ev) ->
-  navigationCallback = findNavigationCallback(ev.data.url)
+  navigationCallback = findNavigationCallback(ev.detail.url)
   if navigationCallback
     for callback in navigationCallback.callbacks
       latestMatchedParams = navigationCallback.url.latestMatchedParams
@@ -311,7 +312,7 @@ document.addEventListener(EVENTS.BEFORE_UNLOAD, storeCurrentPageScroll)
 
 # The callbacks should be fired when the page loads the first time.
 # The object passed to 'callNavigationCallbacks'
-document.addEventListener(EVENTS.STARTED, -> callNavigationCallbacks({data: {url: document.location.href}}))
+document.addEventListener(EVENTS.STARTED, -> callNavigationCallbacks({detail: {url: document.location.href}}))
 
 # Prints to the console everytime a page transitions happens. This is
 # only useful for debugging issues.
@@ -344,10 +345,8 @@ toElements = (htmlString) ->
 
 # Emits the specified event to the document variable
 triggerEvent = (eventName, data) ->
-  event = document.createEvent 'Events'
-  event.data = data if data
-  event.initEvent eventName, true, true
-  document.dispatchEvent event
+  event = new CustomEvent(eventName, {detail: data, cancelable: true})
+  returned = document.dispatchEvent(event)
   aliases = EVENT_ALIASES[eventName]
   if aliases
     triggerEvent(eventName, data) for eventName in aliases
@@ -627,7 +626,7 @@ serializeInput = (data, elm) ->
         break
   if elm.type is 'select-one'
     selected = elm.options[elm.selectedIndex].value
-    data[elm.name] = selected
+    data[elm.name] = selected if selected.trim().length > 0
 
 # Intercepts all form submissions on the page.
 document.addEventListener('submit', (ev) ->
@@ -638,7 +637,6 @@ document.addEventListener('submit', (ev) ->
   for element in form.elements
     maybeUpdateProcessingFeedback(element)
     serializeInput(serialized, element)
-  console.log("SERIALIZED FORM", serialized)
   method = 'POST'
   if serialized['_method']
     method = serialized['_method']
@@ -651,8 +649,8 @@ document.addEventListener('submit', (ev) ->
     ev = triggerEvent(EVENTS.SUBMIT + ':' + form.id, {target: form, url: new Url(url).fullWithoutHash(), method, serialized})
     return 'user stopped...' if ev.defaultPrevented
   currentCacheRef?.scroll = currentPageScroll()
-  if form.hasAttribute 'data-target'
-    target = form.getAttribute 'data-target'
+  if anyAncestorHasAttribute(form, 'data-target')
+    target = anyAncestorAttribute(form, 'data-target')
     ors = onRequestTargetSuccess.bind(null, target, form)
     asyncRequest(method, url, serialized, undefined, ors)
   else
@@ -748,7 +746,7 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure, headers = {}) ->
   method = method.toUpperCase()
-  Reflinks.xhr?.abort()
+  # Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
 
   queryString = ''
@@ -901,9 +899,6 @@ onRequestTargetSuccess = (target, elm, content, url) ->
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
   triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm}
-  unless anyAncestorHasAttribute(elm, 'data-reflinks-keep-state')
-    cacheTarget(target)
-    window.history.pushState({reflinks: true, href: document.location.href, target: target}, "", url)
 
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
