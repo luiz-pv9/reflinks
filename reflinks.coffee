@@ -607,12 +607,15 @@ document.addEventListener('click', (ev) ->
 
 # Insertes in the serialized object the element value.
 serializeInput = (data, elm) ->
-  if ['text', 'password', 'submit', 'textarea', 'email'].indexOf(elm.type) isnt -1
+  if ['text', 'password', 'submit', 'textarea', 'email', 'hidden'].indexOf(elm.type) isnt -1
     data[elm.name] = elm.value
   if elm.type is 'checkbox'
     checkboxes = document.getElementsByName(elm.name)
     if checkboxes.length is 1 and elm.checked
-      data[elm.name] = 'on'
+      if elm.hasAttribute('data-multi')
+        data[elm.name] = elm.value
+      else
+        data[elm.name] = 'on'
     else if checkboxes.length > 1
       values = []
       for checkbox in checkboxes
