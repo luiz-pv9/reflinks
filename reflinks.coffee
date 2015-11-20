@@ -902,7 +902,7 @@ onRequestTargetSuccess = (target, elm, content, url) ->
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
   triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm, url}
-  if elm.hasAttribute('data-target-name')
+  if elm and elm.hasAttribute('data-target-name')
     triggerEvent(EVENTS.TARGET_LOAD + ':' + elm.getAttribute('data-target-name'), 
       {target, nodes: rootNodes, elm, url})
 
