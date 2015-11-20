@@ -901,7 +901,11 @@ onRequestTargetSuccess = (target, elm, content, url) ->
   for node in rootNodes
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
-  triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm}
+  triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm, url}
+  if elm.hasAttribute('data-target-name')
+    triggerEvent(EVENTS.TARGET_LOAD + ':' + elm.getAttribute('data-target-name'), 
+      {target, nodes: rootNodes, elm, url})
+
 
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
