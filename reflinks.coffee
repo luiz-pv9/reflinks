@@ -2,6 +2,18 @@ unless window.history and window.history.pushState
   console.warn("Reflinks not available in this browser")
   return
 
+# Object used to notify the user when an issued request has completed.
+class Request
+  constructor: ->
+    @onloadCallbacks = []
+
+  onload: (callback) ->
+    @onloadCallbacks.push(callback)
+
+  finish: (args) ->
+    for callback in @onloadCallbacks
+      callback(args)
+
 # The Url class represents a single URL and provides helper methods to decide
 # things such as: does the url have hash? does it has query params? is it
 # in the same domain as the current application?
@@ -628,14 +640,12 @@ serializeInput = (data, elm) ->
         data[elm.name] = radio.value
         break
   if elm.type is 'select-one'
-    selected = elm.options[elm.selectedIndex].value
-    data[elm.name] = selected if selected.trim().length > 0
+    selected = elm.options[elm.selectedIndex] and elm.options[elm.selectedIndex].value
+    data[elm.name] = selected if selected and selected.trim().length > 0
 
-# Intercepts all form submissions on the page.
-document.addEventListener('submit', (ev) ->
-  return if shouldIgnoreElement(ev.target)
-  ev.preventDefault()
-  form = ev.target
+# Submits the given `form` with the parameters specified in the element itself,
+# such as 'data-method' and action. 
+submitForm = Reflinks.submit = (form) ->
   serialized = {}
   for element in form.elements
     maybeUpdateProcessingFeedback(element)
@@ -658,6 +668,13 @@ document.addEventListener('submit', (ev) ->
     asyncRequest(method, url, serialized, undefined, ors)
   else
     asyncRequest(method, url, serialized)
+
+
+# Intercepts all form submissions on the page.
+document.addEventListener('submit', (ev) ->
+  return if shouldIgnoreElement(ev.target)
+  ev.preventDefault()
+  submitForm(ev.target)
 )
 
 # Returns true if Reflinks should ignore the element. Reflinks
@@ -752,6 +769,9 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   # Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
 
+  # Request instance that the user uses to capture 'onload' event.
+  request = new Request()
+
   queryString = ''
   if data
     queryString = serializeToQueryString(data)
@@ -778,6 +798,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
       clearTimeout(xhrTimeout)
       if xhr.status is 200
         ors(xhr.responseText, url, skipPushHistory)
+        request.finish({method, url, responseText: xhr.responseText})
       else if xhr.status is Reflinks.redirectStatusCode
         onRedirectSuccess(xhr)
       else
@@ -790,6 +811,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
     data[Reflinks.csrfTokenAttribute] = csrfToken
   xhr.send(queryString)
   ProgressBar.start()
+  return request
 
 # Remove all child elements of the root content in the page that should not
 # be kept on the page (such as ProgressBar and navbars).
@@ -901,11 +923,13 @@ onRequestTargetSuccess = (target, elm, content, url) ->
   for node in rootNodes
     nodesToAdd.push(node)
   targetElm.appendChild(node) for node in nodesToAdd
-  triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm, url}
+  targetName = ''
   if elm and elm.hasAttribute('data-target-name')
+    targetName = elm.getAttribute('data-target-name')
+  triggerEvent EVENTS.TARGET_LOAD, {target, nodes: rootNodes, elm, url, targetName}
+  if targetName isnt ''
     triggerEvent(EVENTS.TARGET_LOAD + ':' + elm.getAttribute('data-target-name'), 
       {target, nodes: rootNodes, elm, url})
-
 
 # Callback called when an AJAX request succeeds.
 onRequestSuccess = (content, url, skipPushHistory) ->
