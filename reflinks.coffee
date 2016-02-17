@@ -766,7 +766,8 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure, headers = {}) ->
   method = method.toUpperCase()
-  # Reflinks.xhr?.abort()
+  Reflinks.xhr?.aborted = true
+  Reflinks.xhr?.abort()
   Reflinks.xhr = xhr = new XMLHttpRequest()
 
   # Request instance that the user uses to capture 'onload' event.
@@ -794,6 +795,7 @@ asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf 
   , Reflinks.xhrTimeout)
   xhr.onerror = -> onRequestFailure()
   xhr.onreadystatechange = () ->
+    return if xhr.aborted
     if xhr.readyState is 4
       clearTimeout(xhrTimeout)
       if xhr.status is 200
