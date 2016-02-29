@@ -943,7 +943,8 @@ onRequestSuccess = (content, url, skipPushHistory) ->
   rootNodes = toElements(getBody(content))
   customRootNode = findDocumentRoot(rootNodes)
   rootNodes = customRootNode.childNodes if customRootNode
-  triggerEvent EVENTS.BEFORE_LOAD, {nodes: rootNodes}
+  ev = triggerEvent EVENTS.BEFORE_LOAD, {nodes: rootNodes, url, title: pageTitle}
+  return 'nothing to do here...' if ev.defaultPrevented
   if isCurrentPageCached()
     if isLocationCached(url)
       updateCacheAndTransitionTo(url, rootNodes)
