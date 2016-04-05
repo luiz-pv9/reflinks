@@ -14,6 +14,11 @@ class Request
     for callback in @onloadCallbacks
       callback(args)
 
+log = () ->
+  args = Array.prototype.slice.call(arguments)
+  args.unshift('[REFLINKS]')
+  console.log.apply(console, args)
+
 # The Url class represents a single URL and provides helper methods to decide
 # things such as: does the url have hash? does it has query params? is it
 # in the same domain as the current application?
@@ -207,11 +212,19 @@ EVENT_ALIASES[EVENTS.RESTORE] = [EVENTS.TRANSITION]
 # for restoring the state of elements that have data-processing attributes.
 rollbackAfterLoad = []
 
+# This variable is used to track if a visit was issued by a click (user action)
+# or programatilly through the API.
+visitedThroughClick = false
+
 # Visits the specified url.
 Reflinks.visit = (href, method = 'GET', target, elm, forceRefresh) ->
   url = new Url(href).fullWithoutHash()
   if target
     ors = onRequestTargetSuccess.bind(null, target, elm)
+
+  # If there is an 'elm' the user clicked on a link, right? The elm is specified
+  # by 'handleAnchorNavigation'.
+  visitedThroughClick = true
 
   if method.toUpperCase() isnt 'DELETE' and isLocationCached(url) and !ors
     # restoreFromCache returns the cache reference or null if nothing was found
@@ -508,7 +521,6 @@ findTargetOrDocumentRoot = (target, elements) ->
     return docRoot if docRoot
   return findDocumentRoot(elements)
 
-
 # Returns the document root for the specified elements. This function, different
 # from findDocumentRootInPage, searches for the document root
 findDocumentRoot = (elements) ->
@@ -766,8 +778,13 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
 # by onRequestSuccess if it succeeds or by onRequestFailure if it fails.
 asyncRequest = (method, url, data, skipPushHistory, ors = onRequestSuccess, orf = onRequestFailure, headers = {}) ->
   method = method.toUpperCase()
-  Reflinks.xhr?.aborted = true
-  Reflinks.xhr?.abort()
+
+  # We only abort the previous request if it was send by a click.
+  if visitedThroughClick
+    Reflinks.xhr?.aborted = true
+    Reflinks.xhr?.abort()
+  visitedThroughClick = false
+
   Reflinks.xhr = xhr = new XMLHttpRequest()
 
   # Request instance that the user uses to capture 'onload' event.
@@ -911,6 +928,7 @@ onRedirectSuccess = (xhr) ->
 # This method is called when the response of a request that is intended
 # to be inserted in the specified target
 onRequestTargetSuccess = (target, elm, content, url) ->
+  log("TARGET SUCCESS!!!!!!")
   Reflinks.xhr = null
   ProgressBar.done()
   csrfToken = getCsrfToken(content)
@@ -922,8 +940,7 @@ onRequestTargetSuccess = (target, elm, content, url) ->
   while targetElm.firstChild
     targetElm.removeChild(targetElm.firstChild)
   nodesToAdd = []
-  for node in rootNodes
-    nodesToAdd.push(node)
+  nodesToAdd.push(node) for node in rootNodes
   targetElm.appendChild(node) for node in nodesToAdd
   targetName = ''
   if elm and elm.hasAttribute('data-target-name')
