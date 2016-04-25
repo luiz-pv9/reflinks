@@ -655,6 +655,13 @@ serializeInput = (data, elm) ->
     selected = elm.options[elm.selectedIndex] and elm.options[elm.selectedIndex].value
     data[elm.name] = selected if selected and selected.trim().length > 0
 
+  if elm.type is 'select-multiple'
+    options = elm.options
+    selected = []
+    for option in options
+      selected.push(option.value) if option.selected
+    data[elm.name] = selected
+
 # Submits the given `form` with the parameters specified in the element itself,
 # such as 'data-method' and action. 
 submitForm = Reflinks.submit = (form) ->
