@@ -775,7 +775,7 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
     if obj.hasOwnProperty(attr)
       value = obj[attr]
       if 'string' is typeof value or 'number' is typeof value or value is true or value is false
-        str.push(prefix + attr  + sufix + '=' + value)
+        str.push(prefix + attr  + sufix + '=' + value.replace(/&/g, '%26'))
       if Object.prototype.toString.call(value) is '[object Array]'
         for val in value
           str.push(prefix + attr + sufix + '=' + val)
