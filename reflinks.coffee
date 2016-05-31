@@ -333,6 +333,7 @@ storeCurrentPageScroll = -> currentCacheRef?.scroll = currentPageScroll()
 
 # Registers the navigation callbacks check to the 'reflinks:load' event.
 document.addEventListener(EVENTS.LOAD, callNavigationCallbacks)
+document.addEventListener(EVENTS.TARGET_LOAD, callNavigationCallbacks)
 document.addEventListener(EVENTS.BEFORE_UNLOAD, storeCurrentPageScroll)
 
 # The callbacks should be fired when the page loads the first time.
@@ -412,7 +413,7 @@ cache = Reflinks.cache = (name = new Url(document.location), once = false) ->
       oldest = Number.POSITIVE_INFINITY
       cacheKey = null
       for key, cache of cacheReferences
-        if cache.cachedAt < oldest
+        if cache.cachedAt < oldest && !cache.once
           oldest = cache.cachedAt
           cacheKey = key
       if cacheKey
@@ -775,7 +776,9 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
     if obj.hasOwnProperty(attr)
       value = obj[attr]
       if 'string' is typeof value or 'number' is typeof value or value is true or value is false
-        str.push(prefix + attr  + sufix + '=' + value.replace(/&/g, '%26'))
+        if value and value.replace
+          value = value.replace(/&/g, '%26')
+        str.push(prefix + attr  + sufix + '=' + value)
       if Object.prototype.toString.call(value) is '[object Array]'
         for val in value
           str.push(prefix + attr + sufix + '=' + val)
