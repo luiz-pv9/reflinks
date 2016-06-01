@@ -136,6 +136,9 @@ csrfToken = ''
 # Reference to the Reflinks object. Available globaly.
 Reflinks = @Reflinks = {}
 
+# Exposing the URL class to the user
+Reflinks.Url = Url
+
 # Just for debugging.
 Reflinks.printCsrfToken = -> console.log(csrfToken)
 Reflinks.printCache = -> console.log(cacheReferences)
@@ -277,12 +280,20 @@ findNavigationCallback = (url) ->
   for nc in navigationCallbacks
     return nc if nc.url.matches(url)
 
+# This function is different from findNavigationCallback. It doesn't try to
+# to `match` urls, instead it compares for equality in the specified path.
+# This is intended to be used when *registering* callbacks.
+findRegisteredNavigationCallback = (url) ->
+  url = new Url(url)
+  for nc in navigationCallbacks
+    return nc if nc.url.path is url.path
+
 # Tries to find the navigationCallback for the specified url and returns it.
 # If nothing is found a new object is created and inserted in the navigationCallbacks
 # array.
 findOrCreateNavigationCallback = (url) ->
   url = new Url(url)
-  navigationCallback = findNavigationCallback url
+  navigationCallback = findRegisteredNavigationCallback url
   return navigationCallback if navigationCallback
   navigationCallback = {url}
   navigationCallbacks.push(navigationCallback)
