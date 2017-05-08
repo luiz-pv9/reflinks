@@ -788,7 +788,7 @@ serializeToQueryString = (obj, prefix = '', sufix = '') ->
       value = obj[attr]
       if 'string' is typeof value or 'number' is typeof value or value is true or value is false
         if value and value.replace
-          value = value.replace(/&/g, '%26')
+          value = encodeURIComponent(value)
         str.push(prefix + attr  + sufix + '=' + value)
       if Object.prototype.toString.call(value) is '[object Array]'
         for val in value
